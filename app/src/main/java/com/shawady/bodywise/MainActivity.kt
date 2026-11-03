@@ -147,7 +147,7 @@ private fun BodyWiseApp() {
                         }
                         val key=selectedDate.toString()
                         val todayKey=LocalDate.now().toString()
-                        val todayCount=meals[todayKey]?.size ?: 0
+                        val todayCount=meals.filterKeys { it.startsWith("$todayKey|") }.values.sumOf { it.size }
                         Row(horizontalArrangement=Arrangement.spacedBy(10.dp),modifier=Modifier.padding(vertical=14.dp)) {
                             SmallStat("وجبات النهارده","$todayCount / 3",Modifier.weight(1f))
                             SmallStat("المياه"," ${water[todayKey] ?: 0} كوب",Modifier.weight(1f))
