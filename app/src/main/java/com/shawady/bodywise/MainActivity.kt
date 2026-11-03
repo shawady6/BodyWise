@@ -150,6 +150,21 @@ private fun BodyWiseApp() {
         }
     }
 
+    var pendingCameraFile by remember { mutableStateOf<File?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val captured = pendingCameraFile
+        if (success && captured != null && captured.exists()) {
+            runCatching {
+                val saved = File(context.filesDir, "progress_${System.currentTimeMillis()}.jpg")
+                captured.copyTo(saved, overwrite = true)
+                photos.add(0, ProgressPhoto(LocalDate.now().toString(), saved.name))
+                saveAll()
+            }.onFailure { updateMessage = "تعذر حفظ الصورة الملتقطة" }
+        }
+        captured?.delete()
+        pendingCameraFile = null
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             runCatching {
@@ -272,7 +287,21 @@ private fun BodyWiseApp() {
                                     Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                         Text("صور التقدم الأسبوعية 📸",fontSize=18.sp,fontWeight=FontWeight.Bold)
                                         Text("أضف صورة كل أسبوع علشان تلاحظ التغيير مع الوقت.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Button(onClick={picker.launch("image/*")},modifier=Modifier.fillMaxWidth()) { Icon(Icons.Default.AddAPhoto,null); Spacer(Modifier.width(8.dp)); Text("إضافة صورة") }
+                                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.fillMaxWidth()) {
+                                            Button(onClick={
+                                                runCatching {
+                                                    val file = File(context.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
+                                                    pendingCameraFile = file
+                                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                                    cameraLauncher.launch(uri)
+                                                }.onFailure { updateMessage = "تعذر فتح الكاميرا" }
+                                            }, modifier=Modifier.weight(1f)) {
+                                                Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(6.dp)); Text("الكاميرا")
+                                            }
+                                            OutlinedButton(onClick={picker.launch("image/*")}, modifier=Modifier.weight(1f)) {
+                                                Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("المعرض")
+                                            }
+                                        }
                                         photos.forEach { photo ->
                                             val bitmap=remember(photo.file) { BitmapFactory.decodeFile(File(context.filesDir,photo.file).absolutePath)?.asImageBitmap() }
                                             if(bitmap!=null) {
@@ -302,6 +331,30 @@ private fun BodyWiseApp() {
                                 Card { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                                     Text("الإعدادات",fontSize=20.sp,fontWeight=FontWeight.Bold)
                                     Row(verticalAlignment=Alignment.CenterVertically) { Text("الوضع الليلي",Modifier.weight(1f)); Switch(dark,{dark=it;prefs.edit().putBoolean("dark",it).apply()}) }
+                                    Row(verticalAlignment=Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("قفل التطبيق بالبصمة",fontWeight=FontWeight.Medium)
+                                            Text("يتطلب التحقق عند فتح التطبيق من جديد",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Switch(checked=lockEnabled,onCheckedChange={ enabled ->
+                                            if (enabled) {
+                                                val status = BiometricManager.from(context).canAuthenticate(
+                                                    BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                                )
+                                                if (status == BiometricManager.BIOMETRIC_SUCCESS) {
+                                                    lockEnabled = true
+                                                    isUnlocked = false
+                                                    prefs.edit().putBoolean("app_lock", true).apply()
+                                                } else {
+                                                    lockMessage = "فعّل بصمة أو قفل شاشة آمن من إعدادات الهاتف أولًا."
+                                                }
+                                            } else {
+                                                lockEnabled = false
+                                                isUnlocked = true
+                                                prefs.edit().putBoolean("app_lock", false).apply()
+                                            }
+                                        })
+                                    }
                                     Text("كل بياناتك محفوظة محليًا على الموبايل.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
                             }
@@ -338,6 +391,24 @@ private fun BodyWiseApp() {
                                     context.startActivity(Intent.createChooser(send,"تصدير نسخة البيانات"))
                                 },modifier=Modifier.fillMaxWidth()) { Text("تصدير نسخة من البيانات") }
                             }
+                        }
+                    }
+                }
+            }
+        }
+        if (lockEnabled && !isUnlocked) {
+            Dialog(onDismissRequest = { }) {
+                Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Icon(Icons.Default.Fingerprint, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
+                        Text("BodyWise مقفول", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                        Text(lockMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = { authenticate() }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.LockOpen, null); Spacer(Modifier.width(8.dp)); Text("فتح بالبصمة")
                         }
                     }
                 }
