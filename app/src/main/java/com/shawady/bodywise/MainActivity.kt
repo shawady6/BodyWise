@@ -5,7 +5,15 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,7 +48,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { BodyWiseApp() }
@@ -59,6 +67,46 @@ private fun BodyWiseApp() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("bodywise_data", Context.MODE_PRIVATE) }
     var page by remember { mutableIntStateOf(0) }
+    var lockEnabled by remember { mutableStateOf(prefs.getBoolean("app_lock", false)) }
+    var isUnlocked by remember { mutableStateOf(!prefs.getBoolean("app_lock", false)) }
+    var lockMessage by remember { mutableStateOf("استخدم بصمة الإصبع أو قفل الشاشة لفتح BodyWise") }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = context as FragmentActivity
+    val promptInfo = remember {
+        BiometricPrompt.PromptInfo.Builder()
+            .setTitle("فتح BodyWise")
+            .setSubtitle("أكد هويتك بالبصمة أو قفل الشاشة")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            .build()
+    }
+    val biometricPrompt = remember {
+        BiometricPrompt(activity, ContextCompat.getMainExecutor(context), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                isUnlocked = true
+                lockMessage = "تم فتح التطبيق"
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                lockMessage = errString.toString()
+            }
+            override fun onAuthenticationFailed() {
+                lockMessage = "لم يتم التعرف على البصمة. حاول مرة أخرى."
+            }
+        })
+    }
+    fun authenticate() { biometricPrompt.authenticate(promptInfo) }
+    DisposableEffect(lifecycleOwner, lockEnabled) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (lockEnabled && event == Lifecycle.Event.ON_STOP) isUnlocked = false
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(lockEnabled, isUnlocked) {
+        if (lockEnabled && !isUnlocked) {
+            kotlinx.coroutines.delay(300)
+            authenticate()
+        }
+    }
     var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
     val meals = remember { mutableStateMapOf<String, MutableList<Food>>() }
     val water = remember { mutableStateMapOf<String, Int>() }
