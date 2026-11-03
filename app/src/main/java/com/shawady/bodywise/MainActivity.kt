@@ -67,6 +67,7 @@ private fun BodyWiseApp() {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var dialogMeal by remember { mutableStateOf<String?>(null) }
     var latestVersion by remember { mutableStateOf<String?>(null) }
+    var updateAvailable by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf("لم يتم التحقق بعد") }
     var checking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -272,11 +273,11 @@ private fun BodyWiseApp() {
                                                 }.getOrNull()
                                             }
                                             checking=false
-                                            if(result!=null){latestVersion=result.first;updateMessage="أحدث إصدار متاح: ${result.first}";if(result.first=="v0.1.0")updateMessage="أنت على الإصدار الأول: ${result.first}"}
+                                            if(result!=null){latestVersion=result.first;updateAvailable=versionIsNewer(result.first, BuildConfig.VERSION_NAME);updateMessage=if(updateAvailable) "فيه تحديث جديد: ${result.first}" else "أنت تستخدم أحدث إصدار مثبت: ${BuildConfig.VERSION_NAME}"}
                                             else updateMessage="تعذر التحقق. جرّب تاني لما الإنترنت يكون متاح."
                                         }
                                     },modifier=Modifier.fillMaxWidth()) { Text(if(checking)"جاري التحقق..." else "التحقق من التحديثات") }
-                                    if(latestVersion!=null) OutlinedButton(onClick={
+                                    if(updateAvailable && latestVersion!=null) OutlinedButton(onClick={
                                         val i=Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/shawady6/BodyWise/releases/latest"));context.startActivity(i)
                                     },modifier=Modifier.fillMaxWidth()) { Text("فتح صفحة تنزيل التحديث") }
                                     Text("التثبيت النهائي بيتم بموافقتك من Android حفاظًا على أمان الجهاز.",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -318,4 +319,16 @@ private fun SmallStat(title:String,value:String,modifier:Modifier=Modifier){
 @Composable
 private fun NumberField(label:String,value:String,onChange:(String)->Unit){
     OutlinedTextField(value,onChange,label={Text(label)},singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
+}
+
+private fun versionIsNewer(latest: String, current: String): Boolean {
+    fun parts(value: String) = value.removePrefix("v").removePrefix("V").split(".").map { it.toIntOrNull() ?: 0 }
+    val a = parts(latest)
+    val b = parts(current)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x != y) return x > y
+    }
+    return false
 }
