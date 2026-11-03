@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -72,11 +73,21 @@ private fun BodyWiseApp() {
     var lockMessage by remember { mutableStateOf("استخدم بصمة الإصبع أو قفل الشاشة لفتح BodyWise") }
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as FragmentActivity
+    val allowedAuthenticators = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        }
+    }
     val promptInfo = remember {
         BiometricPrompt.PromptInfo.Builder()
             .setTitle("فتح BodyWise")
-            .setSubtitle("أكد هويتك بالبصمة أو قفل الشاشة")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            .setSubtitle("أكد هويتك بالبصمة")
+            .setAllowedAuthenticators(allowedAuthenticators)
+            .apply {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) setNegativeButtonText("إلغاء")
+            }
             .build()
     }
     val biometricPrompt = remember {
@@ -338,9 +349,7 @@ private fun BodyWiseApp() {
                                         }
                                         Switch(checked=lockEnabled,onCheckedChange={ enabled ->
                                             if (enabled) {
-                                                val status = BiometricManager.from(context).canAuthenticate(
-                                                    BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                                                )
+                                                val status = BiometricManager.from(context).canAuthenticate(allowedAuthenticators)
                                                 if (status == BiometricManager.BIOMETRIC_SUCCESS) {
                                                     lockEnabled = true
                                                     isUnlocked = false
