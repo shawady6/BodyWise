@@ -29,3 +29,7 @@ The app checks the latest GitHub Release. Android requires the user to approve i
 
 ## Privacy
 No AI, AI APIs, accounts, or required backend. Food logs, measurements, and progress photos are stored locally on the device. Internet is used only for checking the latest app release.
+
+## Version 0.2.0
+
+Camera capture for weekly progress photos, a redesigned BodyWise launcher icon, and optional biometric app lock.
