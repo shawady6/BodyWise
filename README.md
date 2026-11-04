@@ -39,23 +39,19 @@ The app checks the latest GitHub Release, downloads the APK with progress, verif
 
 ### One-time release signing setup
 
-A public release is intentionally skipped until a permanent signing key is configured. On Windows with JDK installed, create a key locally (keytool will prompt for passwords):
+The permanent release keystore has been generated separately. Use the private `BodyWise-Signing-Setup.zip` package supplied to the project owner; it contains the keystore and the four GitHub Actions secret values. Do not generate a second key and do not commit the package contents.
 
-```powershell
-keytool -genkeypair -v -keystore bodywise-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias bodywise
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\bodywise-release.jks")) | Set-Clipboard
-```
+In GitHub, open **Settings → Secrets and variables → Actions** and add the four secrets exactly as listed in the package:
 
-In GitHub, open **Settings → Secrets and variables → Actions** and create these repository secrets:
+- `BODYWISE_KEYSTORE_BASE64`
+- `BODYWISE_STORE_PASSWORD`
+- `BODYWISE_KEY_ALIAS`
+- `BODYWISE_KEY_PASSWORD`
 
-- `BODYWISE_KEYSTORE_BASE64` — the Base64 text copied to the clipboard
-- `BODYWISE_STORE_PASSWORD` — the keystore password
-- `BODYWISE_KEY_ALIAS` — `bodywise`
-- `BODYWISE_KEY_PASSWORD` — the key password
+Keep the ZIP and a separate backup of `bodywise-release.jks` private and safe. Losing the keystore or its passwords prevents future in-place updates.
 
-Never commit the keystore or put its passwords in source code or chat. Keep a secure offline backup of the keystore; losing it prevents future in-place updates.
+**Migration note:** older public APKs used temporary CI debug signing. Since the existing app contains only test data, uninstalling that old build before installing the first permanently signed release is acceptable. Uninstalling erases local app data.
 
-**Migration warning:** older public APKs were built with temporary CI debug signing. Their signing key was not saved, so compatibility with a new permanent key cannot be guaranteed. Do not uninstall an existing installation or clear its data until its records are safely backed up. The in-app updater compares certificates and blocks an incompatible APK rather than risking an update that Android will reject.
 
 ## Privacy
 
