@@ -35,7 +35,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Updates
 
-The app checks the latest GitHub Release, downloads the APK with progress, verifies its SHA-256 digest, checks that its signing certificate matches the installed app, then opens Android’s installer for user approval. Updates signed with a different certificate are blocked to protect app data. A stable release signing key is required for seamless upgrades across builds.
+The app checks the latest GitHub Release, downloads the APK with progress, verifies its SHA-256 digest, checks that its signing certificate matches the installed app, then opens Android’s installer for user approval. Updates signed with a different certificate are blocked to protect app data. A stable release signing key is required for seamless upgrades across builds. Configure the four GitHub Actions secrets `BODYWISE_KEYSTORE_BASE64`, `BODYWISE_STORE_PASSWORD`, `BODYWISE_KEY_ALIAS`, and `BODYWISE_KEY_PASSWORD` before publishing a release. The workflow intentionally skips public releases until signing is configured.
 
 ## Privacy
 
