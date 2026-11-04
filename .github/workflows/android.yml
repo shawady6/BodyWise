@@ -61,6 +61,36 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 --decode > app/bodywise-release.jks
           echo "BODYWISE_KEYSTORE_PATH=bodywise-release.jks" >> "$GITHUB_ENV"
 
+      - name: Diagnose release signing credentials
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          STORE_PASS: ${{ secrets.BODYWISE_STORE_PASSWORD }}
+          KEY_ALIAS_VALUE: ${{ secrets.BODYWISE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.BODYWISE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set +x
+          STORE="app/bodywise-release.jks"
+          if ! keytool -list -keystore "$STORE" -storepass "$STORE_PASS" >/dev/null 2>&1; then
+            echo "::error::STORE_PASSWORD_CHECK_FAILED"
+            exit 1
+          fi
+          echo "STORE_PASSWORD_CHECK=PASS"
+          if ! keytool -list -keystore "$STORE" -storepass "$STORE_PASS" -alias "$KEY_ALIAS_VALUE" >/dev/null 2>&1; then
+            echo "::error::KEY_ALIAS_CHECK_FAILED"
+            exit 1
+          fi
+          echo "KEY_ALIAS_CHECK=PASS"
+          TMP_STORE="$(mktemp)"
+          TMP_PASS="$(openssl rand -hex 24)"
+          if ! keytool -importkeystore -noprompt -srckeystore "$STORE" -srcalias "$KEY_ALIAS_VALUE" -srcstorepass "$STORE_PASS" -srckeypass "$KEY_PASS" -destkeystore "$TMP_STORE" -deststoretype PKCS12 -deststorepass "$TMP_PASS" >/dev/null 2>&1; then
+            rm -f "$TMP_STORE"
+            echo "::error::PRIVATE_KEY_PASSWORD_CHECK_FAILED"
+            exit 1
+          fi
+          rm -f "$TMP_STORE"
+          echo "PRIVATE_KEY_PASSWORD_CHECK=PASS"
+
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
         env:
