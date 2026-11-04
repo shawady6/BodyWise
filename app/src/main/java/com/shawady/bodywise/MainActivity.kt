@@ -637,21 +637,31 @@ private fun BodyWiseApp() {
 
 private fun hasSameSigningCertificate(context: Context, apkFile: File): Boolean {
     return try {
-        val pm=context.packageManager
-        val installed=if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.P) {
-            pm.getPackageInfo(context.packageName,PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        val pm = context.packageManager
+        val installed: List<ByteArray> = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                .signingInfo?.apkContentsSigners?.map { signature -> signature.toByteArray() }
         } else {
             @Suppress("DEPRECATION")
-            pm.getPackageInfo(context.packageName,PackageManager.GET_SIGNATURES).signatures?.map { it.toByteArray() }
-        } ?: return false
-        val archive=if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.P) {
-            pm.getPackageArchiveInfo(apkFile.absolutePath,PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+                .signatures?.map { signature -> signature.toByteArray() }
+        }) ?: return false
+
+        val archive: List<ByteArray> = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+                ?.signingInfo?.apkContentsSigners?.map { signature -> signature.toByteArray() }
         } else {
             @Suppress("DEPRECATION")
-            pm.getPackageArchiveInfo(apkFile.absolutePath,PackageManager.GET_SIGNATURES)?.signatures?.map { it.toByteArray() }
-        } ?: return false
-        installed.map { it.toList() }.toSet() == archive.map { it.toList() }.toSet()
-    } catch (_: Exception) { false }
+            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
+                ?.signatures?.map { signature -> signature.toByteArray() }
+        }) ?: return false
+
+        installed.size == archive.size && installed.all { installedSignature ->
+            archive.any { archiveSignature -> installedSignature.contentEquals(archiveSignature) }
+        }
+    } catch (_: Exception) {
+        false
+    }
 }
 
 private fun writeBackupZip(context: Context, uri: Uri, backupJson: String, photoFiles: List<String>) {
