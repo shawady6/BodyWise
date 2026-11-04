@@ -508,7 +508,7 @@ private fun BodyWiseApp() {
                                         Button(enabled=!downloading,onClick={
                                             val ready=downloadedApk
                                             if(ready!=null && ready.isFile) {
-                                                if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                                if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
                                                     updateMessage="اسمح لـ BodyWise بتثبيت التطبيقات من هذا المصدر، ثم ارجع واضغط تثبيت التحديث."
                                                     runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:${context.packageName}"))) }
                                                 } else if(!hasSameSigningCertificate(context,ready)) {
@@ -525,7 +525,7 @@ private fun BodyWiseApp() {
                                                     }.onFailure { updateMessage="تعذر فتح مثبت Android: ${it.message}" }
                                                 }
                                             } else {
-                                                val url=updateAssetUrl
+                                                val url=updateAssetUrl ?: error("رابط التحديث غير متاح")
                                                 val expected=updateDigest
                                                 downloading=true;downloadProgress=0f;updateMessage="جاري تنزيل ملف التحديث..."
                                                 scope.launch {
@@ -548,9 +548,10 @@ private fun BodyWiseApp() {
                                                             }
                                                             connection.disconnect()
                                                             check(target.length()>1_000_000L) { "حجم ملف APK غير متوقع" }
-                                                            val actual=MessageDigest.getInstance("SHA-256").digest(target.readBytes()).joinToString("") { "%02x".format(it) }
+                                                            val actual=MessageDigest.getInstance("SHA-256").digest(target.readBytes()).joinToString("") { "%02x".format(it.toInt() and 0xff) }
                                                             val expectedHex=expected?.removePrefix("sha256:")?.lowercase()
-                                                            if(!expectedHex.isNullOrBlank()) check(actual==expectedHex) { "فشل التحقق من سلامة الملف (SHA-256)" }
+                                                            check(!expectedHex.isNullOrBlank()) { "لا تتوفر بصمة SHA-256 لهذا الإصدار، أوقفنا التثبيت للأمان" }
+                                                            check(actual==expectedHex) { "فشل التحقق من سلامة الملف (SHA-256)" }
                                                             target
                                                         }
                                                     }
