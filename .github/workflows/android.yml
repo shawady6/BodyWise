@@ -33,15 +33,22 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Create release tag for manual release
+      - name: Read app version
+        id: app_version
         if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
         run: |
-          git tag v0.2.3
-          git push origin v0.2.3
+          VERSION=$(sed -n 's/.*versionName = "\\([^"]*\\)".*/\\1/p' app/build.gradle.kts)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Create release tag
+        if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
+        run: |
+          TAG="v${{ steps.app_version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
       - name: Publish GitHub Release
         if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.3
+          tag_name: v${{ steps.app_version.outputs.version }}
           generate_release_notes: true
           files: app/build/outputs/apk/debug/app-debug.apk
