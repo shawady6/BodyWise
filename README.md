@@ -6,7 +6,7 @@ BodyWise is an offline-first personal Android tracker with three sections:
 
 1. **Food & Water:** Saturday–Friday weekly view, breakfast/lunch/dinner entries, and daily water tracking.
 2. **Weight & Measurements:** weekly weight and body measurements, plus a private progress-photo timeline.
-3. **Settings & Data Safety:** dark mode, optional biometric lock, app update checker, and complete backup/restore.
+3. **Settings & Data Safety:** dark mode, optional biometric lock, in-app APK updates with SHA-256 verification, dark mode, optional biometric lock, and complete backup/restore.
 
 ## Data backup
 
@@ -35,7 +35,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Updates
 
-The app checks the latest GitHub Release. Android requires the user to approve installation of downloaded app updates; the app does not silently install APKs.
+The app checks the latest GitHub Release, downloads the APK with progress, verifies its SHA-256 digest, checks that its signing certificate matches the installed app, then opens Android’s installer for user approval. Updates signed with a different certificate are blocked to protect app data. A stable release signing key is required for seamless upgrades across builds.
 
 ## Privacy
 
@@ -43,4 +43,4 @@ No AI, AI APIs, accounts, or required backend. Food logs, measurements, and prog
 
 ## Current version
 
-v0.2.4 — complete ZIP backup and restore, including progress photos.
+v0.2.5 — in-app APK download and safe installation flow, plus complete ZIP backup and restore.
