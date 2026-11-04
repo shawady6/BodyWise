@@ -87,16 +87,11 @@ jobs:
           KEY_PASS_TRIMMED="$(printf '%s' "$KEY_PASS" | tr -d '\r\n')"
           [ "$KEY_PASS" = "$KEY_PASS_TRIMMED" ] && echo "KEY_PASS_HAS_NEWLINE=false" || echo "KEY_PASS_HAS_NEWLINE=true"
 
+          # keytool ignores -srckeypass for PKCS12, so test with the same API Gradle uses.
+          CHECK_DIR="${GITHUB_WORKSPACE}/.github/scripts"
+          KS_TYPE="$(keytool -list -keystore "$STORE" -storepass "$STORE_PASS" 2>/dev/null | sed -n 's/^Keystore type: //p' | head -1)"
           try_key() {
-            local candidate="$1" tmp_store tmp_pass rc
-            tmp_store="$(mktemp -u)"
-            tmp_pass="$(openssl rand -hex 24)"
-            keytool -importkeystore -noprompt -srckeystore "$STORE" -srcalias "$KEY_ALIAS_VALUE" \
-              -srcstorepass "$STORE_PASS" -srckeypass "$candidate" \
-              -destkeystore "$tmp_store" -deststoretype PKCS12 -deststorepass "$tmp_pass" >/dev/null 2>&1
-            rc=$?
-            rm -f "$tmp_store"
-            return $rc
+            CHECK_STORE_PASS="$STORE_PASS" CHECK_KEY_PASS="$1" java "$CHECK_DIR/KeyCheck.java" "$KS_TYPE" "$STORE" "$KEY_ALIAS_VALUE" >/dev/null 2>&1
           }
 
           CHOSEN=""
