@@ -1,0 +1,14 @@
+# Gradle / Android Studio
+.gradle/
+**/build/
+local.properties
+
+# Signing material - never commit
+*.jks
+*.keystore
+app/bodywise-release.jks
+
+# IDE
+.idea/
+*.iml
+.DS_Store
