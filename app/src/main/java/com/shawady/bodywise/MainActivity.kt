@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
+import android.provider.Settings
+import java.security.MessageDigest
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -132,6 +134,11 @@ private fun BodyWiseApp() {
     var updateAvailable by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf("لم يتم التحقق بعد") }
     var checking by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var updateAssetUrl by remember { mutableStateOf<String?>(null) }
+    var updateDigest by remember { mutableStateOf<String?>(null) }
+    var downloadedApk by remember { mutableStateOf<File?>(null) }
     var backupMessage by remember { mutableStateOf("لا توجد نسخة احتياطية حديثة") }
     val scope = rememberCoroutineScope()
 
@@ -459,27 +466,107 @@ private fun BodyWiseApp() {
                             item {
                                 Card { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                                     Text("تحديث التطبيق",fontSize=18.sp,fontWeight=FontWeight.Bold)
+                                    Text("الإصدار المثبت: ${BuildConfig.VERSION_NAME}",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(updateMessage,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Button(enabled=!checking,onClick={
-                                        checking=true;updateMessage="جاري التحقق..."
+                                    Button(enabled=!checking && !downloading,onClick={
+                                        checking=true;updateMessage="جاري التحقق من آخر إصدار..."
                                         scope.launch {
                                             val result=withContext(Dispatchers.IO) {
                                                 runCatching {
-                                                    val c=URL("https://api.github.com/repos/shawady6/BodyWise/releases/latest").openConnection() as HttpURLConnection
-                                                    c.connectTimeout=8000;c.readTimeout=8000;c.setRequestProperty("Accept","application/vnd.github+json")
-                                                    val body=c.inputStream.bufferedReader().use{it.readText()};c.disconnect()
-                                                    val j=JSONObject(body);j.optString("tag_name") to j.optString("html_url")
-                                                }.getOrNull()
+                                                    val connection=URL("https://api.github.com/repos/shawady6/BodyWise/releases/latest").openConnection() as HttpURLConnection
+                                                    connection.connectTimeout=12000;connection.readTimeout=12000
+                                                    connection.setRequestProperty("Accept","application/vnd.github+json")
+                                                    val body=connection.inputStream.bufferedReader().use{it.readText()}
+                                                    connection.disconnect()
+                                                    val release=JSONObject(body)
+                                                    val assets=release.optJSONArray("assets") ?: JSONArray()
+                                                    var apk:JSONObject?=null
+                                                    for(index in 0 until assets.length()) {
+                                                        val asset=assets.getJSONObject(index)
+                                                        if(asset.optString("name").endsWith(".apk")) { apk=asset; break }
+                                                    }
+                                                    val selected=apk ?: error("ملف APK غير موجود في أحدث إصدار")
+                                                    Triple(release.optString("tag_name"),selected.optString("browser_download_url"),selected.optString("digest"))
+                                                }
                                             }
                                             checking=false
-                                            if(result!=null){latestVersion=result.first;updateAvailable=versionIsNewer(result.first, BuildConfig.VERSION_NAME);updateMessage=if(updateAvailable) "فيه تحديث جديد: ${result.first}" else "أنت تستخدم أحدث إصدار مثبت: ${BuildConfig.VERSION_NAME}"}
-                                            else updateMessage="تعذر التحقق. جرّب تاني لما الإنترنت يكون متاح."
+                                            result.onSuccess { info ->
+                                                latestVersion=info.first
+                                                updateAssetUrl=info.second
+                                                updateDigest=info.third
+                                                updateAvailable=versionIsNewer(info.first,BuildConfig.VERSION_NAME)
+                                                downloadedApk=null
+                                                updateMessage=if(updateAvailable) "متاح تحديث ${info.first}. نزّله وثبّته من هنا." else "أنت تستخدم أحدث إصدار مثبت: ${BuildConfig.VERSION_NAME}"
+                                            }.onFailure { updateMessage="تعذر التحقق: ${it.message ?: "راجع اتصال الإنترنت"}" }
                                         }
                                     },modifier=Modifier.fillMaxWidth()) { Text(if(checking)"جاري التحقق..." else "التحقق من التحديثات") }
-                                    if(updateAvailable && latestVersion!=null) OutlinedButton(onClick={
-                                        val i=Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/shawady6/BodyWise/releases/latest"));context.startActivity(i)
-                                    },modifier=Modifier.fillMaxWidth()) { Text("فتح صفحة تنزيل التحديث") }
-                                    Text("التثبيت النهائي بيتم بموافقتك من Android حفاظًا على أمان الجهاز.",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if(updateAvailable && updateAssetUrl!=null) {
+                                        if(downloading) {
+                                            LinearProgressIndicator(progress={downloadProgress},modifier=Modifier.fillMaxWidth())
+                                            Text("جاري تنزيل التحديث: ${(downloadProgress*100).toInt()}%",fontSize=12.sp)
+                                        }
+                                        Button(enabled=!downloading,onClick={
+                                            val ready=downloadedApk
+                                            if(ready!=null && ready.isFile) {
+                                                if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                                    updateMessage="اسمح لـ BodyWise بتثبيت التطبيقات من هذا المصدر، ثم ارجع واضغط تثبيت التحديث."
+                                                    runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:${context.packageName}"))) }
+                                                } else if(!hasSameSigningCertificate(context,ready)) {
+                                                    updateMessage="التحديث تم تنزيله وفحصه، لكن توقيعه مختلف عن التطبيق المثبت. أوقفنا التثبيت لحماية بياناتك. يلزم إعداد توقيع ثابت متوافق أولًا."
+                                                } else {
+                                                    runCatching {
+                                                        val apkUri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",ready)
+                                                        val install=Intent(Intent.ACTION_VIEW).apply {
+                                                            setDataAndType(apkUri,"application/vnd.android.package-archive")
+                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                        context.startActivity(install)
+                                                        updateMessage="تم فتح مثبت Android. وافق على التحديث لإكمال التثبيت."
+                                                    }.onFailure { updateMessage="تعذر فتح مثبت Android: ${it.message}" }
+                                                }
+                                            } else {
+                                                val url=updateAssetUrl
+                                                val expected=updateDigest
+                                                downloading=true;downloadProgress=0f;updateMessage="جاري تنزيل ملف التحديث..."
+                                                scope.launch {
+                                                    val result=withContext(Dispatchers.IO) {
+                                                        runCatching {
+                                                            val connection=URL(url).openConnection() as HttpURLConnection
+                                                            connection.connectTimeout=15000;connection.readTimeout=30000
+                                                            connection.instanceFollowRedirects=true
+                                                            val total=connection.contentLengthLong
+                                                            val target=File(context.cacheDir,"bodywise-update.apk")
+                                                            connection.inputStream.use { input ->
+                                                                target.outputStream().use { output ->
+                                                                    val buffer=ByteArray(64*1024);var count:Long=0
+                                                                    while(true) {
+                                                                        val read=input.read(buffer);if(read<0) break
+                                                                        output.write(buffer,0,read);count+=read
+                                                                        if(total>0) withContext(Dispatchers.Main) { downloadProgress=(count.toFloat()/total).coerceIn(0f,1f) }
+                                                                    }
+                                                                }
+                                                            }
+                                                            connection.disconnect()
+                                                            check(target.length()>1_000_000L) { "حجم ملف APK غير متوقع" }
+                                                            val actual=MessageDigest.getInstance("SHA-256").digest(target.readBytes()).joinToString("") { "%02x".format(it) }
+                                                            val expectedHex=expected?.removePrefix("sha256:")?.lowercase()
+                                                            if(!expectedHex.isNullOrBlank()) check(actual==expectedHex) { "فشل التحقق من سلامة الملف (SHA-256)" }
+                                                            target
+                                                        }
+                                                    }
+                                                    downloading=false
+                                                    result.onSuccess { file ->
+                                                        downloadedApk=file
+                                                        downloadProgress=1f
+                                                        updateMessage="اكتمل التنزيل وتم التحقق من سلامة الملف. اضغط تثبيت التحديث."
+                                                    }.onFailure { updateMessage="فشل تنزيل التحديث: ${it.message ?: "خطأ غير معروف"}" }
+                                                }
+                                            }
+                                        },modifier=Modifier.fillMaxWidth()) {
+                                            Text(if(downloadedApk!=null)"تثبيت التحديث" else "تنزيل التحديث")
+                                        }
+                                    }
+                                    Text("يتم فحص SHA-256 قبل فتح مثبت Android. التثبيت يحتاج موافقتك، وبياناتك لا تُحذف بالتحديث المتوافق.",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
                             }
                             item {
@@ -545,6 +632,25 @@ private fun BodyWiseApp() {
     }
 }
 
+
+private fun hasSameSigningCertificate(context: Context, apkFile: File): Boolean {
+    return try {
+        val pm=context.packageManager
+        val installed=if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.P) {
+            pm.getPackageInfo(context.packageName,PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(context.packageName,PackageManager.GET_SIGNATURES).signatures?.map { it.toByteArray() }
+        } ?: return false
+        val archive=if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.P) {
+            pm.getPackageArchiveInfo(apkFile.absolutePath,PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageArchiveInfo(apkFile.absolutePath,PackageManager.GET_SIGNATURES)?.signatures?.map { it.toByteArray() }
+        } ?: return false
+        installed.map { it.toList() }.toSet() == archive.map { it.toList() }.toSet()
+    } catch (_: Exception) { false }
+}
 
 private fun writeBackupZip(context: Context, uri: Uri, backupJson: String, photoFiles: List<String>) {
     val output = context.contentResolver.openOutputStream(uri) ?: error("تعذر فتح ملف الحفظ")
