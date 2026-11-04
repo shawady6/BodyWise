@@ -77,7 +77,8 @@ jobs:
         id: app_version
         if: steps.signing.outputs.configured == 'true' && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')))
         run: |
-          VERSION=$(sed -n 's/.*versionName = "\\([^"]*\\)".*/\\1/p' app/build.gradle.kts)
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ -z "$VERSION" ]; then echo "::error::Could not read versionName from app/build.gradle.kts"; exit 1; fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create release tag
