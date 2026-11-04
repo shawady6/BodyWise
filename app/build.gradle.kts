@@ -5,6 +5,23 @@ plugins {
 }
 
 android {
+    val releaseKeystorePath = System.getenv("BODYWISE_KEYSTORE_PATH")
+    signingConfigs {
+        create("release") {
+            if (!releaseKeystorePath.isNullOrBlank()) {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("BODYWISE_STORE_PASSWORD")
+                keyAlias = System.getenv("BODYWISE_KEY_ALIAS")
+                keyPassword = System.getenv("BODYWISE_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
     namespace = "com.shawady.bodywise"
     compileSdk = 35
     defaultConfig {
