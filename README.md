@@ -43,4 +43,4 @@ No AI, AI APIs, accounts, or required backend. Food logs, measurements, and prog
 
 ## Current version
 
-v0.2.5 — in-app APK download and safe installation flow, plus complete ZIP backup and restore.
+v0.2.5 — in-app APK download and safe installation flow, plus complete ZIP backup and restore. The signed public release is generated only when the stable signing secrets are configured.
