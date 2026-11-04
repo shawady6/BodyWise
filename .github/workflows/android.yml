@@ -59,7 +59,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.BODYWISE_KEYSTORE_BASE64 }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > app/bodywise-release.jks
-          echo "BODYWISE_KEYSTORE_PATH=app/bodywise-release.jks" >> "$GITHUB_ENV"
+          echo "BODYWISE_KEYSTORE_PATH=bodywise-release.jks" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
