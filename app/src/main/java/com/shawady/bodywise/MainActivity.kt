@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
+import android.content.pm.PackageManager
 import java.security.MessageDigest
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricManager
