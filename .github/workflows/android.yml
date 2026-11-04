@@ -81,23 +81,61 @@ jobs:
             exit 1
           fi
           echo "KEY_ALIAS_CHECK=PASS"
-          TMP_STORE="$(mktemp)"
-          TMP_PASS="$(openssl rand -hex 24)"
-          if ! keytool -importkeystore -noprompt -srckeystore "$STORE" -srcalias "$KEY_ALIAS_VALUE" -srcstorepass "$STORE_PASS" -srckeypass "$KEY_PASS" -destkeystore "$TMP_STORE" -deststoretype PKCS12 -deststorepass "$TMP_PASS" >/dev/null 2>&1; then
-            rm -f "$TMP_STORE"
-            echo "::error::PRIVATE_KEY_PASSWORD_CHECK_FAILED"
+          # Non-disclosing facts only (types and booleans, never values).
+          echo "KEYSTORE_TYPE=$(keytool -list -keystore "$STORE" -storepass "$STORE_PASS" 2>/dev/null | sed -n 's/^Keystore type: //p' | head -1)"
+          [ "$KEY_PASS" = "$STORE_PASS" ] && echo "KEY_PASS_EQUALS_STORE_PASS=true" || echo "KEY_PASS_EQUALS_STORE_PASS=false"
+          KEY_PASS_TRIMMED="$(printf '%s' "$KEY_PASS" | tr -d '\r\n')"
+          [ "$KEY_PASS" = "$KEY_PASS_TRIMMED" ] && echo "KEY_PASS_HAS_NEWLINE=false" || echo "KEY_PASS_HAS_NEWLINE=true"
+
+          try_key() {
+            local candidate="$1" tmp_store tmp_pass rc
+            tmp_store="$(mktemp -u)"
+            tmp_pass="$(openssl rand -hex 24)"
+            keytool -importkeystore -noprompt -srckeystore "$STORE" -srcalias "$KEY_ALIAS_VALUE" \
+              -srcstorepass "$STORE_PASS" -srckeypass "$candidate" \
+              -destkeystore "$tmp_store" -deststoretype PKCS12 -deststorepass "$tmp_pass" >/dev/null 2>&1
+            rc=$?
+            rm -f "$tmp_store"
+            return $rc
+          }
+
+          CHOSEN=""
+          if try_key "$KEY_PASS"; then
+            echo "PRIVATE_KEY_PASSWORD_CHECK=PASS (BODYWISE_KEY_PASSWORD)"
+            CHOSEN="$KEY_PASS"
+          elif [ -n "$KEY_PASS_TRIMMED" ] && try_key "$KEY_PASS_TRIMMED"; then
+            echo "PRIVATE_KEY_PASSWORD_CHECK=PASS (BODYWISE_KEY_PASSWORD without trailing newline)"
+            CHOSEN="$KEY_PASS_TRIMMED"
+          elif try_key "$STORE_PASS"; then
+            echo "PRIVATE_KEY_PASSWORD_CHECK=PASS (store password; BODYWISE_KEY_PASSWORD secret does not match the key)"
+            echo "::warning::BODYWISE_KEY_PASSWORD does not open the private key, but the store password does. Using the store password as the key password. Update the BODYWISE_KEY_PASSWORD secret to match."
+            CHOSEN="$STORE_PASS"
+          else
+            echo "::error::PRIVATE_KEY_PASSWORD_CHECK_FAILED (neither BODYWISE_KEY_PASSWORD nor the store password opens the private key)"
             exit 1
           fi
-          rm -f "$TMP_STORE"
-          echo "PRIVATE_KEY_PASSWORD_CHECK=PASS"
+          echo "::add-mask::$CHOSEN"
+          {
+            echo "BODYWISE_EFFECTIVE_KEY_PASSWORD<<BODYWISE_EOF"
+            echo "$CHOSEN"
+            echo "BODYWISE_EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
         env:
           BODYWISE_STORE_PASSWORD: ${{ secrets.BODYWISE_STORE_PASSWORD }}
           BODYWISE_KEY_ALIAS: ${{ secrets.BODYWISE_KEY_ALIAS }}
-          BODYWISE_KEY_PASSWORD: ${{ secrets.BODYWISE_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease
+        run: |
+          export BODYWISE_KEY_PASSWORD="$BODYWISE_EFFECTIVE_KEY_PASSWORD"
+          gradle --no-daemon assembleRelease
+
+      - name: Verify release APK signature
+        if: steps.signing.outputs.configured == 'true'
+        shell: bash
+        run: |
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "^(Verifies|Verified using|Number of signers)|certificate SHA-256 digest"
 
       - name: Generate release APK SHA-256
         if: steps.signing.outputs.configured == 'true'
@@ -115,6 +153,10 @@ jobs:
         if: steps.signing.outputs.configured == 'true' && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')))
         run: |
           TAG="v${{ steps.app_version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Bump versionName/versionCode instead of replacing a published release."
+            exit 1
+          fi
           git tag "$TAG"
           git push origin "$TAG"
 
@@ -127,3 +169,13 @@ jobs:
           files: |
             app/build/outputs/apk/release/app-release.apk
             app-release.apk.sha256
+
+      - name: Verify release assets exist
+        if: steps.signing.outputs.configured == 'true' && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.app_version.outputs.version }}"
+          ASSETS="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "$ASSETS"
+          echo "$ASSETS" | grep -qx 'app-release.apk' && echo "$ASSETS" | grep -qx 'app-release.apk.sha256'
