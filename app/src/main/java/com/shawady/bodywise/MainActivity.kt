@@ -48,6 +48,9 @@ import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +132,7 @@ private fun BodyWiseApp() {
     var updateAvailable by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf("لم يتم التحقق بعد") }
     var checking by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf("لا توجد نسخة احتياطية حديثة") }
     val scope = rememberCoroutineScope()
 
     fun saveAll() {
@@ -186,6 +190,91 @@ private fun BodyWiseApp() {
             }.onFailure { updateMessage = "تعذر حفظ الصورة" }
         }
     }
+
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) {
+            val backupJson = JSONObject()
+                .put("format", "bodywise-backup")
+                .put("version", 1)
+                .put("exportedAt", LocalDate.now().toString())
+                .put("meals", JSONObject(prefs.getString("meals", "{}") ?: "{}"))
+                .put("water", JSONObject(prefs.getString("water", "{}") ?: "{}"))
+                .put("measurements", JSONArray(prefs.getString("measurements", "[]") ?: "[]"))
+                .put("photos", JSONArray(prefs.getString("photos", "[]") ?: "[]"))
+                .toString(2)
+            val photoFiles = photos.map { it.file }
+            scope.launch {
+                backupMessage = "جاري إنشاء النسخة الاحتياطية..."
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { writeBackupZip(context, uri, backupJson, photoFiles) }
+                }
+                backupMessage = if (result.isSuccess) "تم حفظ النسخة الاحتياطية بنجاح، بالصور والبيانات." else "فشل إنشاء النسخة الاحتياطية: ${result.exceptionOrNull()?.message ?: "خطأ غير معروف"}"
+            }
+        }
+    }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                backupMessage = "جاري فحص النسخة الاحتياطية..."
+                val result = withContext(Dispatchers.IO) { runCatching { readBackupZip(context, uri) } }
+                result.onSuccess { (backup, tempDir) ->
+                    try {
+                        val mealsJson = backup.getJSONObject("meals")
+                        val waterJson = backup.getJSONObject("water")
+                        val measurementsJson = backup.getJSONArray("measurements")
+                        val sourcePhotos = backup.optJSONArray("photos") ?: JSONArray()
+                        val restoredPhotoJson = JSONArray()
+                        val restoredPhotoItems = mutableListOf<ProgressPhoto>()
+                        for (i in 0 until sourcePhotos.length()) {
+                            val item = sourcePhotos.getJSONObject(i)
+                            val oldName = File(item.getString("file")).name
+                            val source = File(File(tempDir, "photos"), oldName)
+                            if (source.isFile) {
+                                val restoredName = "progress_restored_${System.currentTimeMillis()}_$i.jpg"
+                                source.copyTo(File(context.filesDir, restoredName), overwrite = true)
+                                val date = item.optString("date", LocalDate.now().toString())
+                                restoredPhotoJson.put(JSONObject().put("date", date).put("file", restoredName))
+                                restoredPhotoItems.add(ProgressPhoto(date, restoredName))
+                            }
+                        }
+
+                        prefs.edit()
+                            .putString("meals", mealsJson.toString())
+                            .putString("water", waterJson.toString())
+                            .putString("measurements", measurementsJson.toString())
+                            .putString("photos", restoredPhotoJson.toString())
+                            .apply()
+
+                        meals.clear()
+                        mealsJson.keys().forEach { key ->
+                            val array = mealsJson.getJSONArray(key)
+                            meals[key] = MutableList(array.length()) { index ->
+                                val item = array.getJSONObject(index)
+                                Food(item.getString("name"), item.optString("amount"))
+                            }
+                        }
+                        water.clear()
+                        waterJson.keys().forEach { key -> water[key] = waterJson.getInt(key) }
+                        measurements.clear()
+                        for (i in 0 until measurementsJson.length()) {
+                            val item = measurementsJson.getJSONObject(i)
+                            measurements.add(Measure(item.getString("date"), item.optString("weight"), item.optString("belly"), item.optString("waist"), item.optString("chest"), item.optString("arm"), item.optString("thigh")))
+                        }
+                        photos.clear()
+                        photos.addAll(restoredPhotoItems)
+                        backupMessage = "تمت استعادة البيانات و${restoredPhotoItems.size} صورة بنجاح."
+                    } catch (error: Exception) {
+                        backupMessage = "تعذرت استعادة النسخة: ${error.message ?: "ملف غير صالح"}"
+                    } finally {
+                        tempDir.deleteRecursively()
+                    }
+                }.onFailure { backupMessage = "الملف غير صالح أو تعذر قراءته: ${it.message ?: "خطأ غير معروف"}" }
+            }
+        }
+    }
+
 
     MaterialTheme(colorScheme = if (dark) darkColorScheme(primary=androidx.compose.ui.graphics.Color(0xFF8BC49B)) else lightColorScheme(primary=green, secondary=green, background=androidx.compose.ui.graphics.Color(0xFFF6F8F5), surface=androidx.compose.ui.graphics.Color.White)) {
         Scaffold(
@@ -394,11 +483,28 @@ private fun BodyWiseApp() {
                                 } }
                             }
                             item {
-                                OutlinedButton(onClick={
-                                    val backup=JSONObject().put("meals",JSONObject(prefs.getString("meals","{}")?:"{}")).put("water",JSONObject(prefs.getString("water","{}")?:"{}")).put("measurements",JSONArray(prefs.getString("measurements","[]")?:"[]")).toString(2)
-                                    val send=Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_TEXT,backup)
-                                    context.startActivity(Intent.createChooser(send,"تصدير نسخة البيانات"))
-                                },modifier=Modifier.fillMaxWidth()) { Text("تصدير نسخة من البيانات") }
+                                Card {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                        Text("النسخ الاحتياطي والاستعادة", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        Text("احفظ الوجبات والمياه والقياسات وصور التقدم في ملف واحد، واستعدها عند تغيير الهاتف.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Button(onClick = {
+                                            exportBackupLauncher.launch("BodyWise-Backup-${LocalDate.now()}.zip")
+                                        }, modifier = Modifier.fillMaxWidth()) {
+                                            Icon(Icons.Default.Backup, null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("إنشاء نسخة احتياطية كاملة")
+                                        }
+                                        OutlinedButton(onClick = {
+                                            importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                                        }, modifier = Modifier.fillMaxWidth()) {
+                                            Icon(Icons.Default.Restore, null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("استعادة نسخة احتياطية")
+                                        }
+                                        Text(backupMessage, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("الاستعادة تستبدل البيانات الحالية بالبيانات الموجودة في النسخة المختارة.", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
                             }
                         }
                     }
@@ -436,6 +542,59 @@ private fun BodyWiseApp() {
         },confirmButton={TextButton(onClick={
             if(name.isNotBlank()){val k="${selectedDate}|$dialogMeal";val list=meals[k]?.toMutableList()?: mutableListOf();list.add(Food(name.trim(),amount.trim()));meals[k]=list;saveAll();dialogMeal=null}
         }){Text("حفظ")}},dismissButton={TextButton(onClick={dialogMeal=null}){Text("إلغاء")}})
+    }
+}
+
+
+private fun writeBackupZip(context: Context, uri: Uri, backupJson: String, photoFiles: List<String>) {
+    val output = context.contentResolver.openOutputStream(uri) ?: error("تعذر فتح ملف الحفظ")
+    ZipOutputStream(output).use { zip ->
+        zip.putNextEntry(ZipEntry("backup.json"))
+        zip.write(backupJson.toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+        photoFiles.forEach { originalName ->
+            val safeName = File(originalName).name
+            val photo = File(context.filesDir, safeName)
+            if (photo.isFile) {
+                zip.putNextEntry(ZipEntry("photos/$safeName"))
+                photo.inputStream().use { input -> input.copyTo(zip) }
+                zip.closeEntry()
+            }
+        }
+    }
+}
+
+private fun readBackupZip(context: Context, uri: Uri): Pair<JSONObject, File> {
+    val tempDir = File(context.cacheDir, "bodywise_restore_${System.currentTimeMillis()}").apply { mkdirs() }
+    try {
+        val input = context.contentResolver.openInputStream(uri) ?: error("تعذر فتح ملف النسخة")
+        ZipInputStream(input).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                val name = entry.name
+                if (name == "backup.json") {
+                    File(tempDir, "backup.json").outputStream().use { zip.copyTo(it) }
+                } else if (!entry.isDirectory && name.startsWith("photos/")) {
+                    val fileName = name.removePrefix("photos/")
+                    if (fileName.isNotBlank() && File(fileName).name == fileName && !fileName.contains("..")) {
+                        val photoDir = File(tempDir, "photos").apply { mkdirs() }
+                        File(photoDir, fileName).outputStream().use { zip.copyTo(it) }
+                    }
+                }
+                zip.closeEntry()
+            }
+        }
+        val manifest = File(tempDir, "backup.json")
+        check(manifest.isFile) { "ملف النسخة لا يحتوي على بيانات BodyWise" }
+        val backup = JSONObject(manifest.readText(Charsets.UTF_8))
+        check(backup.optString("format") == "bodywise-backup" && backup.optInt("version") == 1) { "صيغة النسخة غير مدعومة" }
+        backup.getJSONObject("meals")
+        backup.getJSONObject("water")
+        backup.getJSONArray("measurements")
+        return backup to tempDir
+    } catch (error: Exception) {
+        tempDir.deleteRecursively()
+        throw error
     }
 }
 
