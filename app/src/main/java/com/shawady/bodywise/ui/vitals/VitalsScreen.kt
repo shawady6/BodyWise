@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import com.shawady.bodywise.data.SUGAR_TAGS
 import com.shawady.bodywise.data.VitalReading
 import com.shawady.bodywise.data.VitalType
+import com.shawady.bodywise.data.vitalWarning
+import androidx.compose.ui.graphics.Color
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.Hint
@@ -93,6 +95,9 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
                     Text(type.unit, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
                 }
                 Hint("${latest.at.toLocalDate()}  ${latest.at.format(timeFormat)}" + if (latest.tag.isNotBlank()) "  •  ${latest.tag}" else "")
+                vitalWarning(latest)?.let { w ->
+                    Text(w.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (w.severe) Color(0xFFD32F2F) else Color(0xFFE08A00))
+                }
             }
             Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Add, null)
@@ -115,7 +120,12 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
             readings.take(60).forEach { r ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("${r.display()} ${type.unit}", fontWeight = FontWeight.SemiBold)
+                        val w = vitalWarning(r)
+                        Text(
+                            "${r.display()} ${type.unit}" + if (w != null) (if (w.severe) "  ⚠️ خطر" else "  ▲▼ خارج المعدل") else "",
+                            fontWeight = FontWeight.SemiBold,
+                            color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> Color(0xFFD32F2F); else -> Color(0xFFE08A00) }
+                        )
                         Hint("${r.at.toLocalDate()}  ${r.at.format(timeFormat)}" + (if (r.tag.isNotBlank()) "  •  ${r.tag}" else "") + (if (r.note.isNotBlank()) "  •  ${r.note}" else ""))
                     }
                     IconButton(onClick = { editing = r }) { Icon(Icons.Default.Edit, "تعديل") }
@@ -124,7 +134,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
             }
         }
 
-        Hint("التطبيق بيسجّل القراءات ويعرض اتجاهها بس، ومش بيدّي تشخيص ولا بيغني عن استشارة الدكتور.")
+        Hint("التحذيرات حسب المعدلات العامة للبالغين وللتنبيه بس، ومش تشخيص ولا بتغني عن استشارة الدكتور.")
         androidx.compose.foundation.layout.Spacer(Modifier.padding(8.dp))
     }
 
@@ -133,7 +143,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
             type = type,
             initial = editing,
             onDismiss = { adding = false; editing = null },
-            onSave = { vm.saveVital(it); adding = false; editing = null }
+            onSave = { vm.saveVital(it); vm.toast = vitalWarning(it)?.text; adding = false; editing = null }
         )
     }
 }
