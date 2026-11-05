@@ -144,6 +144,11 @@ private fun BodyWiseApp() {
     var downloadedApk by remember { mutableStateOf<File?>(null) }
     var backupMessage by remember { mutableStateOf("لا توجد نسخة احتياطية حديثة") }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        InstallEvents.message.collect { message ->
+            if (message != null) { updateMessage = message; InstallEvents.message.value = null }
+        }
+    }
 
     fun saveAll() {
         val mealJson = JSONObject()
@@ -480,18 +485,15 @@ private fun BodyWiseApp() {
                                                 if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
                                                     updateMessage="اسمح لـ BodyWise بتثبيت التطبيقات من هذا المصدر، ثم ارجع واضغط تثبيت التحديث."
                                                     runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:${context.packageName}"))) }
-                                                } else if(!hasSameSigningCertificate(context,ready)) {
-                                                    updateMessage="التحديث تم تنزيله وفحصه، لكن توقيعه مختلف عن التطبيق المثبت. أوقفنا التثبيت لحماية بياناتك. يلزم إعداد توقيع ثابت متوافق أولًا."
+                                                } else if(signingCertificatesMatch(context,ready)==false) {
+                                                    updateMessage="توقيع التحديث مختلف عن التطبيق المثبت (غالبًا النسخة المثبتة من بناء قديم). خد نسخة احتياطية، امسح BodyWise مرة واحدة، ثم ثبّت النسخة الجديدة."
                                                 } else {
-                                                    runCatching {
-                                                        val apkUri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",ready)
-                                                        val install=Intent(Intent.ACTION_VIEW).apply {
-                                                            setDataAndType(apkUri,"application/vnd.android.package-archive")
-                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
-                                                        context.startActivity(install)
-                                                        updateMessage="تم فتح مثبت Android. وافق على التحديث لإكمال التثبيت."
-                                                    }.onFailure { updateMessage="تعذر فتح مثبت Android: ${it.message}" }
+                                                    updateMessage="جاري تجهيز التثبيت..."
+                                                    scope.launch {
+                                                        val started=withContext(Dispatchers.IO) { runCatching { installApk(context,ready) } }
+                                                        started.onSuccess { updateMessage="تم فتح مثبت Android. وافق على التحديث لإكمال التثبيت." }
+                                                            .onFailure { updateMessage="تعذر بدء التثبيت: ${it.message ?: it.javaClass.simpleName}" }
+                                                    }
                                                 }
                                             } else {
                                                 val url=updateAssetUrl ?: error("رابط التحديث غير متاح")
@@ -620,32 +622,28 @@ private fun BodyWiseApp() {
 }
 
 
-private fun hasSameSigningCertificate(context: Context, apkFile: File): Boolean {
+/** true/false when both certificates are readable; null when Android cannot read them (then Android itself decides). */
+private fun signingCertificatesMatch(context: Context, apkFile: File): Boolean? {
     return try {
         val pm = context.packageManager
-        val installed: List<ByteArray> = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val installed: List<ByteArray>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-                .signingInfo?.apkContentsSigners?.map { signature -> signature.toByteArray() }
+                .signingInfo?.apkContentsSigners?.map { it.toByteArray() }
         } else {
             @Suppress("DEPRECATION")
-            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
-                .signatures?.map { signature -> signature.toByteArray() }
-        }) ?: return false
-
-        val archive: List<ByteArray> = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
-                ?.signingInfo?.apkContentsSigners?.map { signature -> signature.toByteArray() }
-        } else {
-            @Suppress("DEPRECATION")
-            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
-                ?.signatures?.map { signature -> signature.toByteArray() }
-        }) ?: return false
-
-        installed.size == archive.size && installed.all { installedSignature ->
-            archive.any { archiveSignature -> installedSignature.contentEquals(archiveSignature) }
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES).signatures?.map { it.toByteArray() }
         }
+        val archive: List<ByteArray>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+                ?.signingInfo?.apkContentsSigners?.map { it.toByteArray() }
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)?.signatures?.map { it.toByteArray() }
+        }
+        if (installed.isNullOrEmpty() || archive.isNullOrEmpty()) return null
+        installed.size == archive.size && installed.all { a -> archive.any { b -> a.contentEquals(b) } }
     } catch (_: Exception) {
-        false
+        null
     }
 }
 
