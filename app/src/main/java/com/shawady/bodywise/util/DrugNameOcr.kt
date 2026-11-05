@@ -43,7 +43,7 @@ suspend fun recognizeDrugNames(path: String): List<String> = withContext(Dispatc
     val bitmap = decodeThumbnail(path, 1600) ?: return@withContext emptyList()
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     try {
-        val text: com.google.mlkit.vision.text.Text? = suspendCancellableCoroutine { cont ->
+        val text = suspendCancellableCoroutine<com.google.mlkit.vision.text.Text?> { cont ->
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener { cont.resume(it) }
                 .addOnFailureListener { cont.resume(null) }
