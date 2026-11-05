@@ -57,7 +57,9 @@ data class Snapshot(
     val notes: Map<String, DayNote> = emptyMap(),
     val heightCm: Double? = null,
     val targetWeight: Double? = null,
-    val vitals: List<VitalReading> = emptyList()
+    val vitals: List<VitalReading> = emptyList(),
+    val medications: List<Medication> = emptyList(),
+    val doseLogs: List<DoseLog> = emptyList()
 )
 
 /** themeMode: 0 = follow system, 1 = light, 2 = dark. */

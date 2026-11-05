@@ -44,6 +44,9 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     val notes = mutableStateMapOf<String, DayNote>()
     val measurements = mutableStateListOf<Measurement>()
     val photos = mutableStateListOf<ProgressPhoto>()
+    private val medStore = com.shawady.bodywise.data.MedStore(app)
+    val medications = mutableStateListOf<com.shawady.bodywise.data.Medication>()
+    val doseLogs = mutableStateMapOf<String, com.shawady.bodywise.data.DoseLog>()
     val vitals = mutableStateListOf<com.shawady.bodywise.data.VitalReading>()
     var waterGoal by mutableIntStateOf(8)
         private set
@@ -65,7 +68,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         Reminders.ensureChannel(app)
+        com.shawady.bodywise.notify.MedAlarms.ensureChannel(app)
         apply(store.load())
+        medStore.prune(LocalDate.now().minusDays(120))
+        reloadMeds()
+        com.shawady.bodywise.notify.MedAlarms.rescheduleAll(app)
         cleanOrphanPhotos()
     }
 
@@ -83,7 +90,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun snapshot() = Snapshot(
         meals.toMap(), water.toMap(), measurements.toList(), photos.toList(), waterGoal,
-        notes.toMap(), heightCm, targetWeight, vitals.toList()
+        notes.toMap(), heightCm, targetWeight, vitals.toList(),
+        medStore.loadMeds(), medStore.loadLogs().values.toList()
     )
 
     private fun persist() = store.save(snapshot())
@@ -208,6 +216,61 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         offerUndo(UndoRequest("اتحذف قياس ${measurement.date}", undo = { saveMeasurement(measurement) }))
     }
 
+    // ---- Medications ----
+    /** Alarms and notification buttons change these while the app is closed, so the screen re-reads them. */
+    fun reloadMeds() {
+        val meds = medStore.loadMeds().sortedBy { it.name }
+        medications.clear(); medications.addAll(meds)
+        val logs = medStore.loadLogs()
+        doseLogs.clear(); doseLogs.putAll(logs)
+    }
+
+    private fun medsChanged() {
+        reloadMeds()
+        com.shawady.bodywise.notify.MedAlarms.rescheduleAll(getApplication())
+    }
+
+    fun saveMedication(med: com.shawady.bodywise.data.Medication) {
+        val old = medications.firstOrNull { it.id == med.id }
+        medStore.upsert(med)
+        if (old?.photo != null && old.photo != med.photo) File(store.photosDir, old.photo).delete()
+        medsChanged()
+    }
+
+    fun deleteMedication(med: com.shawady.bodywise.data.Medication) {
+        medStore.delete(med.id)
+        medsChanged()
+        offerUndo(UndoRequest("اتحذف دواء ${med.name}",
+            undo = { medStore.upsert(med); medsChanged() },
+            commit = { med.photo?.let { File(store.photosDir, it).delete() } }))
+    }
+
+    fun markDose(slot: com.shawady.bodywise.data.DoseSlot, status: com.shawady.bodywise.data.DoseStatus) {
+        medStore.mark(slot.med, slot.date, slot.time, status, java.time.LocalDateTime.now())
+        reloadMeds()
+        getApplication<Application>().getSystemService(android.app.NotificationManager::class.java)
+            .cancel(("false|${slot.med.id}|${slot.time}").hashCode())
+    }
+
+    fun clearDose(slot: com.shawady.bodywise.data.DoseSlot) {
+        medStore.clear(slot.med, slot.date, slot.time)
+        reloadMeds()
+    }
+
+    fun importMedPhoto(open: () -> InputStream?, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val dest = File(store.photosDir, "med_${System.currentTimeMillis()}.jpg")
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { importPhoto(open, dest, 1280) }.getOrDefault(false).also { if (!it) dest.delete() }
+            }
+            if (!ok) toast = "تعذر حفظ الصورة"
+            onDone(if (ok) dest.name else null)
+        }
+    }
+
+    fun medPhotoFile(name: String): File = File(store.photosDir, name)
+    fun deleteStrayFile(name: String) { File(store.photosDir, name).delete() }
+
     // ---- Vitals ----
     fun saveVital(reading: com.shawady.bodywise.data.VitalReading) {
         val index = vitals.indexOfFirst { it.id == reading.id }
@@ -310,9 +373,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
             result.onSuccess { restored ->
                 undoRequest?.commit?.invoke()
                 undoRequest = null
-                val oldFiles = photos.map { it.file }
+                val oldFiles = photos.map { it.file } + medications.mapNotNull { it.photo }
                 apply(restored)
                 persist()
+                medStore.replaceAll(restored.medications, restored.doseLogs)
+                medsChanged()
                 oldFiles.forEach { File(store.photosDir, it).delete() }
                 WaterWidgetProvider.refresh(context)
                 backupMessage = "تمت استعادة البيانات و${restored.photos.size} صورة بنجاح."

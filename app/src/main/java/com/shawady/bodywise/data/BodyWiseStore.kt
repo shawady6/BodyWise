@@ -22,7 +22,9 @@ class BodyWiseStore(private val context: Context) {
         notes = runCatching { SnapshotJson.notesFromJson(JSONObject(prefs.getString("notes", "{}") ?: "{}")) }.getOrDefault(emptyMap()),
         heightCm = prefs.getString("height_cm", null)?.let { parseDecimal(it) },
         targetWeight = prefs.getString("target_weight", null)?.let { parseDecimal(it) },
-        vitals = runCatching { SnapshotJson.vitalsFromJson(JSONArray(prefs.getString("vitals", "[]") ?: "[]")) }.getOrDefault(emptyList())
+        vitals = runCatching { SnapshotJson.vitalsFromJson(JSONArray(prefs.getString("vitals", "[]") ?: "[]")) }.getOrDefault(emptyList()),
+        medications = MedStore(context).loadMeds(),
+        doseLogs = MedStore(context).loadLogs().values.toList()
     )
 
     fun save(snapshot: Snapshot) {

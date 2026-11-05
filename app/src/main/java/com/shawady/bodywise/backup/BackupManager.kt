@@ -32,6 +32,15 @@ object BackupManager {
                     zip.closeEntry()
                 }
             }
+            snapshot.medications.forEach { med ->
+                val name = med.photo?.let { File(it).name } ?: return@forEach
+                val file = File(photosDir, name)
+                if (file.isFile) {
+                    zip.putNextEntry(ZipEntry("medphotos/$name"))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
         }
     }
 
@@ -51,10 +60,11 @@ object BackupManager {
                     if (!entry.isDirectory) {
                         if (name == MANIFEST) {
                             total += copyLimited(zip, File(temp, MANIFEST), MAX_JSON)
-                        } else if (name.startsWith("photos/")) {
-                            val fileName = name.removePrefix("photos/")
+                        } else if (name.startsWith("photos/") || name.startsWith("medphotos/")) {
+                            val folder = name.substringBefore("/")
+                            val fileName = name.removePrefix("$folder/")
                             if (fileName.isNotBlank() && File(fileName).name == fileName && !fileName.contains("..")) {
-                                val dir = File(temp, "photos").apply { mkdirs() }
+                                val dir = File(temp, folder).apply { mkdirs() }
                                 total += copyLimited(zip, File(dir, fileName), MAX_PHOTO)
                             }
                         }
@@ -77,7 +87,17 @@ object BackupManager {
                     photos.add(ProgressPhoto(photo.date, newName))
                 }
             }
-            return parsed.copy(photos = photos)
+            val meds = parsed.medications.mapIndexed { index, med ->
+                val source = med.photo?.let { File(File(temp, "medphotos"), File(it).name) }
+                if (source != null && source.isFile) {
+                    val newName = "med_restored_${System.currentTimeMillis()}_$index.jpg"
+                    val target = File(photosDir, newName)
+                    source.copyTo(target, overwrite = true)
+                    copied.add(target)
+                    med.copy(photo = newName)
+                } else med.copy(photo = null)
+            }
+            return parsed.copy(photos = photos, medications = meds)
         } catch (error: Exception) {
             copied.forEach { it.delete() }
             throw error

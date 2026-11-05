@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 4
+    const val VERSION = 5
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -134,6 +134,64 @@ object SnapshotJson {
         )
     }
 
+    fun medsToJson(list: List<Medication>): JSONArray {
+        val array = JSONArray()
+        list.forEach { m ->
+            array.put(JSONObject()
+                .put("id", m.id).put("name", m.name).put("dose", m.dose).put("unit", m.unit)
+                .put("times", JSONArray(m.times.map { it.toString() }))
+                .put("days", JSONArray(m.days.map { it.value }))
+                .put("start", m.startDate.toString()).put("end", m.endDate?.toString() ?: "")
+                .put("instruction", m.instruction).put("notes", m.notes)
+                .put("photo", m.photo?.let { java.io.File(it).name } ?: "")
+                .put("remaining", m.remaining?.let { formatNumber(it) } ?: "")
+                .put("createdAt", m.createdAt.toString()))
+        }
+        return array
+    }
+
+    fun medsFromJson(array: JSONArray): List<Medication> = List(array.length()) { i ->
+        val item = array.getJSONObject(i)
+        val times = item.getJSONArray("times")
+        val days = item.optJSONArray("days") ?: JSONArray()
+        Medication(
+            id = item.getString("id"),
+            name = item.getString("name"),
+            dose = item.optString("dose"),
+            unit = item.optString("unit"),
+            times = List(times.length()) { java.time.LocalTime.parse(times.getString(it)) }.sorted(),
+            days = List(days.length()) { java.time.DayOfWeek.of(days.getInt(it)) }.toSet(),
+            startDate = LocalDate.parse(item.getString("start")),
+            endDate = item.optString("end").takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) },
+            instruction = item.optString("instruction"),
+            notes = item.optString("notes"),
+            photo = item.optString("photo").takeIf { it.isNotBlank() }?.let { java.io.File(it).name },
+            remaining = parseDecimal(item.optString("remaining")),
+            createdAt = java.time.LocalDateTime.parse(item.getString("createdAt"))
+        )
+    }
+
+    fun logsToJson(list: List<DoseLog>): JSONArray {
+        val array = JSONArray()
+        list.forEach { l ->
+            array.put(JSONObject().put("med", l.medId).put("date", l.date.toString()).put("time", l.time.toString())
+                .put("status", l.status.name).put("at", l.at.toString()).put("snoozes", l.snoozes))
+        }
+        return array
+    }
+
+    fun logsFromJson(array: JSONArray): List<DoseLog> = List(array.length()) { i ->
+        val item = array.getJSONObject(i)
+        DoseLog(
+            medId = item.getString("med"),
+            date = LocalDate.parse(item.getString("date")),
+            time = java.time.LocalTime.parse(item.getString("time")),
+            status = DoseStatus.valueOf(item.getString("status")),
+            at = java.time.LocalDateTime.parse(item.getString("at")),
+            snoozes = item.optInt("snoozes", 0)
+        )
+    }
+
     fun toBackup(snapshot: Snapshot, exportedAt: LocalDate): JSONObject = JSONObject()
         .put("format", FORMAT)
         .put("version", VERSION)
@@ -144,6 +202,8 @@ object SnapshotJson {
         .put("photos", photosToJson(snapshot.photos))
         .put("notes", notesToJson(snapshot.notes))
         .put("vitals", vitalsToJson(snapshot.vitals))
+        .put("medications", medsToJson(snapshot.medications))
+        .put("doseLogs", logsToJson(snapshot.doseLogs))
         .put("settings", JSONObject()
             .put("waterGoal", snapshot.waterGoal)
             .put("heightCm", snapshot.heightCm?.let { formatNumber(it) } ?: "")
@@ -161,7 +221,9 @@ object SnapshotJson {
             notes = json.optJSONObject("notes")?.let { notesFromJson(it) } ?: emptyMap(),
             heightCm = parseDecimal(json.optJSONObject("settings")?.optString("heightCm").orEmpty()),
             targetWeight = parseDecimal(json.optJSONObject("settings")?.optString("targetWeight").orEmpty()),
-            vitals = json.optJSONArray("vitals")?.let { vitalsFromJson(it) } ?: emptyList()
+            vitals = json.optJSONArray("vitals")?.let { vitalsFromJson(it) } ?: emptyList(),
+            medications = json.optJSONArray("medications")?.let { medsFromJson(it) } ?: emptyList(),
+            doseLogs = json.optJSONArray("doseLogs")?.let { logsFromJson(it) } ?: emptyList()
         )
     }
 }

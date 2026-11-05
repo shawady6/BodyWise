@@ -6,7 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.LocalDateTime
 
 class SerializationTest {
@@ -25,7 +27,15 @@ class SerializationTest {
         vitals = listOf(
             VitalReading("v1", VitalType.BP, LocalDateTime.of(2026, 11, 5, 8, 30), 120.0, 80.0, "", "الصبح"),
             VitalReading("v2", VitalType.SUGAR, LocalDateTime.of(2026, 11, 5, 9, 0), 95.0, null, "صائم", "")
-        )
+        ),
+        medications = listOf(
+            Medication(
+                "m1", "بنادول", "1", "قرص", listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
+                setOf(DayOfWeek.SATURDAY, DayOfWeek.MONDAY), LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30),
+                "بعد الأكل", "مع مية", "med_1.jpg", 20.0, LocalDateTime.of(2026, 11, 1, 7, 0)
+            )
+        ),
+        doseLogs = listOf(DoseLog("m1", LocalDate.of(2026, 11, 5), LocalTime.of(8, 0), DoseStatus.TAKEN, LocalDateTime.of(2026, 11, 5, 8, 5), 1))
     )
 
     @Test

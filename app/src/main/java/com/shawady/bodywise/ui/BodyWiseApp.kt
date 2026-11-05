@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Settings
@@ -64,6 +65,7 @@ import com.shawady.bodywise.ui.settings.OnboardingScreen
 import com.shawady.bodywise.ui.settings.SettingsScreen
 import com.shawady.bodywise.ui.theme.BodyWiseTheme
 import com.shawady.bodywise.ui.vitals.VitalsScreen
+import com.shawady.bodywise.ui.meds.MedsScreen
 import com.shawady.bodywise.update.UpdateViewModel
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -106,7 +108,7 @@ fun BodyWiseApp(activity: FragmentActivity) {
             }
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_RESUME) vm.reloadWater()
+                    if (event == Lifecycle.Event.ON_RESUME) { vm.reloadWater(); vm.reloadMeds() }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -168,6 +170,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                 NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي") })
                 NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي") })
                 NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي") })
+                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي") })
             }
         }
     ) { padding ->
@@ -186,6 +189,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                 0 -> FoodScreen(vm)
                 1 -> ProgressScreen(vm)
                 2 -> VitalsScreen(vm)
+                4 -> MedsScreen(vm)
                 else -> SettingsScreen(vm, updateVm, appLock.isAvailable())
             }
         }
