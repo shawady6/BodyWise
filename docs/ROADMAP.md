@@ -1,28 +1,23 @@
 # Roadmap
 
-## Phase 0 — Foundation
-- [x] Android Compose project and GitHub Actions debug APK build
-- [x] Three-section navigation shell
+## تم (v0.3.0)
+- [x] هيكل منظم (data / util / backup / update / security / notify / ui) مع ViewModel
+- [x] رسم بياني لكل مقياس، وتعديل/حذف القياسات
+- [x] مياه لأي يوم وهدف قابل للتعديل، والتنقل بين الأسابيع، وملخص أسبوعي
+- [x] صور: تدوير EXIF، تصغير، قائمة كسولة، مقارنة قبل/بعد، حذف
+- [x] استعادة آمنة بتأكيد وفحص كامل قبل التغيير
+- [x] تذكيرات المياه وقياسات الأسبوع
+- [x] نسخ احتياطي أسبوعي تلقائي لمجلد يختاره المستخدم
+- [x] التثبيت عبر PackageInstaller مع رسائل خطأ حقيقية
+- [x] اختبارات وحدة للمنطق والتحويل (تعمل في CI)
 
-## Phase 1 — Simple tracker
-- [x] Weekly meal view (Saturday–Friday)
-- [x] Breakfast, lunch and dinner entry
-- [x] Daily water cup counter
-- [x] Weight and body measurement entry/history
-- [x] Weekly progress photo picker and private app storage
-- [x] Light/dark mode
-- [x] Basic data export
-- [x] GitHub latest-release checker
+## التالي
+- [ ] اختبار يدوي على أكثر من هاتف/إصدار Android (التحديث الداخلي، الكاميرا، التذكيرات)
+- [ ] اختبارات instrumented للواجهة والاستعادة
+- [ ] Widget للمياه
+- [ ] تصدير القياسات CSV
 
-## Phase 2 — Stabilization
-- [ ] Verify app build and install on a physical Android phone
-- [ ] Improve backup/restore to include progress photos
-- [ ] Add editable measurement history and deletion controls
-- [ ] Compare latest release tag with installed app version and show a clear update state
-- [ ] Add automated tests for local persistence and date/week handling
-
-## Product guardrails
-- No AI features, models, providers, APIs, or cloud inference.
-- No account or backend required.
-- Personal food, measurement, and photo data stays on-device.
-- Android update installation always requires the user's approval.
+## الضوابط
+- لا AI ولا سحابة ولا حسابات.
+- البيانات والصور على الجهاز.
+- تثبيت التحديث يحتاج موافقة المستخدم دائمًا.
