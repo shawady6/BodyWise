@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
@@ -59,11 +61,15 @@ import com.shawady.bodywise.ui.components.Hint
 import com.shawady.bodywise.ui.components.LineChart
 import com.shawady.bodywise.ui.components.NumberField
 import com.shawady.bodywise.ui.components.PhotoThumb
+import com.shawady.bodywise.data.computeMonthStats
+import com.shawady.bodywise.util.arabicMonth
+import com.shawady.bodywise.util.bmi
 import com.shawady.bodywise.util.formatNumber
 import com.shawady.bodywise.util.parseDecimal
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 import java.util.UUID
 
@@ -74,8 +80,6 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
     val context = LocalContext.current
     var metric by remember { mutableStateOf(Metric.WEIGHT) }
     var measurementEditor by remember { mutableStateOf<MeasurementEditor?>(null) }
-    var measurementToDelete by remember { mutableStateOf<Measurement?>(null) }
-    var photoToDelete by remember { mutableStateOf<ProgressPhoto?>(null) }
     var showCompare by remember { mutableStateOf(false) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
 
@@ -118,9 +122,11 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
                         Hint("عن القياس السابق: ${signed(sincePrevious)} ${metric.unit} • منذ البداية: ${signed(sinceFirst)} ${metric.unit}")
                     }
                 }
-                LineChart(series, metric.unit)
+                LineChart(series, metric.unit, target = if (metric == Metric.WEIGHT) vm.targetWeight else null)
+                if (metric == Metric.WEIGHT && series.isNotEmpty()) WeightExtras(vm, series.first().second, series.last().second)
             }
         }
+        item { MonthStatsCard(vm) }
         item {
             Button(onClick = { measurementEditor = MeasurementEditor(null) }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Add, null)
@@ -144,7 +150,7 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
                         )
                     }
                     IconButton(onClick = { measurementEditor = MeasurementEditor(m) }) { Icon(Icons.Default.Edit, "تعديل القياس") }
-                    IconButton(onClick = { measurementToDelete = m }) { Icon(Icons.Default.DeleteOutline, "حذف القياس") }
+                    IconButton(onClick = { vm.deleteMeasurement(m) }) { Icon(Icons.Default.DeleteOutline, "حذف القياس") }
                 }
             }
         }
@@ -186,7 +192,7 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
                 PhotoThumb(vm.photoFile(photo))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Hint(photo.date.toString(), Modifier.weight(1f))
-                    IconButton(onClick = { photoToDelete = photo }) { Icon(Icons.Default.DeleteOutline, "حذف الصورة") }
+                    IconButton(onClick = { vm.deletePhoto(photo) }) { Icon(Icons.Default.DeleteOutline, "حذف الصورة") }
                 }
             }
         }
@@ -198,16 +204,6 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
             onSave = { vm.saveMeasurement(it); measurementEditor = null },
             onDismiss = { measurementEditor = null }
         )
-    }
-    measurementToDelete?.let { target ->
-        ConfirmDialog("حذف القياس؟", "سيتم حذف قياسات ${target.date} نهائيًا.", "حذف",
-            onConfirm = { vm.deleteMeasurement(target); measurementToDelete = null },
-            onDismiss = { measurementToDelete = null })
-    }
-    photoToDelete?.let { target ->
-        ConfirmDialog("حذف الصورة؟", "سيتم حذف صورة ${target.date} من جهازك نهائيًا.", "حذف",
-            onConfirm = { vm.deletePhoto(target); photoToDelete = null },
-            onDismiss = { photoToDelete = null })
     }
     if (showCompare) {
         CompareDialog(vm, onDismiss = { showCompare = false })
@@ -308,4 +304,62 @@ private fun CompareDialog(vm: BodyWiseViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } }
     )
+}
+
+@Composable
+private fun WeightExtras(vm: BodyWiseViewModel, first: Double, latest: Double) {
+    val target = vm.targetWeight
+    if (target != null) {
+        val remaining = latest - target
+        if (kotlin.math.abs(remaining) < 0.05) {
+            Text("حققت هدفك 🎉", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        } else {
+            val total = first - target
+            val done = if (total == 0.0) 0.0 else ((first - latest) / total).coerceIn(0.0, 1.0)
+            Text("الهدف ${formatNumber(target)} كجم — باقي ${formatNumber(Math.round(kotlin.math.abs(remaining) * 10) / 10.0)} كجم (${(done * 100).toInt()}% من الطريق)")
+        }
+    } else {
+        Hint("حدد وزن مستهدف من الإعدادات لعرضه على الرسم البياني.")
+    }
+    val height = vm.heightCm
+    val value = if (height != null) bmi(latest, height) else null
+    if (value != null) {
+        Hint("BMI تقريبي: ${"%.1f".format(value)} — تقدير فقط وليس تشخيصًا (النطاق المرجعي 18.5–24.9).")
+    } else if (height == null) {
+        Hint("أضف طولك من الإعدادات لعرض BMI تقريبي.")
+    }
+}
+
+@Composable
+private fun MonthStatsCard(vm: BodyWiseViewModel) {
+    var month by remember { mutableStateOf(YearMonth.now()) }
+    val today = LocalDate.now()
+    val stats = computeMonthStats(
+        month, today, { vm.mealsCount(it) }, { vm.waterFor(it) }, { vm.noteFor(it) }, vm.measurements.toList(), vm.waterGoal
+    )
+    AppCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { month = month.minusMonths(1) }) { Icon(Icons.Default.ChevronRight, "الشهر السابق") }
+            Text(
+                "ملخص ${arabicMonth(month.atDay(1))} ${month.year} 📅",
+                modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            IconButton(onClick = { month = month.plusMonths(1) }, enabled = month < YearMonth.now()) { Icon(Icons.Default.ChevronLeft, "الشهر التالي") }
+        }
+        if (stats.daysInRange == 0) {
+            Hint("مفيش أيام في الشهر ده لسه.")
+        } else {
+            Text("سجّلت وجبات في ${stats.daysWithMeals} من ${stats.daysInRange} يوم")
+            Text("متوسط المياه: ${"%.1f".format(stats.avgWater)} كوب • وصلت للهدف ${stats.goalDays} يوم")
+            stats.avgSleep?.let { Text("متوسط النوم: ${"%.1f".format(it)} ساعة") }
+            if (stats.exerciseDays > 0) Text("تمرنت ${stats.exerciseDays} يوم (إجمالي ${stats.exerciseMinutes} دقيقة)")
+            if (stats.weightFirst != null && stats.weightLast != null && stats.weightAvg != null) {
+                val change = stats.weightLast - stats.weightFirst
+                Text("الوزن: من ${formatNumber(stats.weightFirst)} إلى ${formatNumber(stats.weightLast)} كجم (${signed(change)}) • المتوسط ${"%.1f".format(stats.weightAvg)}")
+            } else {
+                Hint("مفيش قياسات وزن في الشهر ده.")
+            }
+        }
+    }
 }

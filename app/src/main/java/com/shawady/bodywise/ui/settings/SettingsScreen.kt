@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,6 +50,9 @@ import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.ConfirmDialog
 import com.shawady.bodywise.ui.components.Hint
+import com.shawady.bodywise.ui.components.NumberField
+import com.shawady.bodywise.util.formatNumber
+import com.shawady.bodywise.util.parseDecimal
 import com.shawady.bodywise.update.UpdateViewModel
 import java.time.LocalDate
 
@@ -57,7 +61,6 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
     val context = LocalContext.current
     val settings = vm.settings
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
-    var pendingReminder by remember { mutableStateOf<String?>(null) }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) vm.exportBackup(uri)
@@ -76,29 +79,12 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             vm.toast = "تم تفعيل النسخ الاحتياطي الأسبوعي"
         }
     }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val kind = pendingReminder
-        pendingReminder = null
-        if (granted) {
-            if (kind == "water") vm.setWaterReminders(true)
-            if (kind == "weekly") vm.setWeeklyReminder(true)
-        } else {
-            vm.toast = "لازم تسمح بالإشعارات من إعدادات الهاتف علشان التذكيرات تشتغل"
-        }
+    val toggleReminder = rememberReminderToggler(vm)
+    val csv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) vm.exportCsv(uri)
     }
-
-    fun toggleReminder(kind: String, enabled: Boolean) {
-        if (!enabled) {
-            if (kind == "water") vm.setWaterReminders(false) else vm.setWeeklyReminder(false)
-            return
-        }
-        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        if (needsPermission) {
-            pendingReminder = kind
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else if (kind == "water") vm.setWaterReminders(true) else vm.setWeeklyReminder(true)
-    }
+    var heightText by remember { mutableStateOf(vm.heightCm?.let { formatNumber(it) } ?: "") }
+    var targetText by remember { mutableStateOf(vm.targetWeight?.let { formatNumber(it) } ?: "") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -121,6 +107,23 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                     IconButton(onClick = { vm.changeWaterGoal(vm.waterGoal - 1) }) { Icon(Icons.Default.Remove, "نقص") }
                     IconButton(onClick = { vm.changeWaterGoal(vm.waterGoal + 1) }) { Icon(Icons.Default.Add, "زيادة") }
                 }
+            }
+        }
+        item {
+            AppCard {
+                Text("بياناتي", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                NumberField("الطول (سم)", heightText, { heightText = it })
+                NumberField("الوزن المستهدف (كجم)", targetText, { targetText = it })
+                Hint("الطول بيُستخدم لحساب BMI تقريبي، والهدف بيظهر كخط على الرسم البياني.")
+                Button(onClick = {
+                    val h = parseDecimal(heightText)
+                    val t = parseDecimal(targetText)
+                    when {
+                        heightText.isNotBlank() && (h == null || h < 100 || h > 250) -> vm.toast = "الطول لازم يكون بين 100 و250 سم"
+                        targetText.isNotBlank() && (t == null || t < 20 || t > 400) -> vm.toast = "الوزن المستهدف غير منطقي"
+                        else -> { vm.setProfile(h, t); vm.toast = "تم الحفظ" }
+                    }
+                }, modifier = Modifier.fillMaxWidth()) { Text("حفظ") }
             }
         }
         item {
@@ -154,6 +157,9 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                     enabled = !vm.busy, modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Restore, null); Spacer(Modifier.width(8.dp)); Text("استعادة نسخة احتياطية")
+                }
+                OutlinedButton(onClick = { csv.launch("BodyWise-Measurements-${LocalDate.now()}.csv") }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.TableChart, null); Spacer(Modifier.width(8.dp)); Text("تصدير القياسات (CSV للإكسل)")
                 }
                 Hint(vm.backupMessage)
                 Hint("الاستعادة تستبدل البيانات الحالية بالبيانات الموجودة في النسخة المختارة.")
@@ -200,16 +206,5 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             onConfirm = { pendingRestore = null; vm.restoreBackup(uri) },
             onDismiss = { pendingRestore = null }
         )
-    }
-}
-
-@Composable
-private fun SwitchRow(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.Medium)
-            Hint(description)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

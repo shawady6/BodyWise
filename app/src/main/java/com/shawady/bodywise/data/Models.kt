@@ -23,13 +23,21 @@ data class Measurement(val id: String, val date: LocalDate, val values: Map<Metr
 
 data class ProgressPhoto(val date: LocalDate, val file: String)
 
+/** Daily extras: sleep, mood (1–5), exercise minutes and a short text. */
+data class DayNote(val sleepHours: Double?, val mood: Int?, val exerciseMinutes: Int?, val text: String) {
+    val isEmpty: Boolean get() = sleepHours == null && mood == null && exerciseMinutes == null && text.isBlank()
+}
+
 /** Everything the user has recorded. Meal keys are "yyyy-MM-dd|<slot key>", water keys are "yyyy-MM-dd". */
 data class Snapshot(
     val meals: Map<String, List<FoodEntry>> = emptyMap(),
     val water: Map<String, Int> = emptyMap(),
     val measurements: List<Measurement> = emptyList(),
     val photos: List<ProgressPhoto> = emptyList(),
-    val waterGoal: Int = 8
+    val waterGoal: Int = 8,
+    val notes: Map<String, DayNote> = emptyMap(),
+    val heightCm: Double? = null,
+    val targetWeight: Double? = null
 )
 
 /** themeMode: 0 = follow system, 1 = light, 2 = dark. */
@@ -39,5 +47,6 @@ data class AppSettings(
     val waterReminders: Boolean = false,
     val weeklyReminder: Boolean = false,
     val autoBackupUri: String? = null,
-    val lastAutoBackup: String? = null
+    val lastAutoBackup: String? = null,
+    val onboarded: Boolean = false
 )

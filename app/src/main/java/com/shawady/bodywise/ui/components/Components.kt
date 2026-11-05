@@ -28,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -115,14 +117,15 @@ fun PhotoThumb(file: File, modifier: Modifier = Modifier, height: Int = 190) {
 
 /** Simple line chart; time runs left to right regardless of the app's RTL layout. */
 @Composable
-fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Modifier = Modifier) {
+fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Modifier = Modifier, target: Double? = null) {
     if (points.size < 2) {
         Hint("سجّل قياسين على الأقل لعرض الرسم البياني.", modifier)
         return
     }
     val primary = MaterialTheme.colorScheme.primary
     val grid = MaterialTheme.colorScheme.outlineVariant
-    val values = points.map { it.second }
+    val targetColor = Color(0xFFE0A030)
+    val values = points.map { it.second } + listOfNotNull(target)
     val minValue = values.min()
     val maxValue = values.max()
     val pad = (if (maxValue - minValue > 0.0) maxValue - minValue else 1.0) * 0.15
@@ -145,6 +148,12 @@ fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Mod
                 val span = (points.last().first.toEpochDay() - firstDay).coerceAtLeast(1L).toFloat()
                 fun px(date: LocalDate): Float = w * (date.toEpochDay() - firstDay) / span
                 fun py(value: Double): Float = h - (h * ((value - low) / (high - low))).toFloat()
+                if (target != null) {
+                    drawLine(
+                        targetColor, Offset(0f, py(target)), Offset(w, py(target)),
+                        strokeWidth = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+                    )
+                }
                 val path = Path()
                 points.forEachIndexed { index, (date, value) ->
                     if (index == 0) path.moveTo(px(date), py(value)) else path.lineTo(px(date), py(value))
@@ -152,6 +161,7 @@ fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Mod
                 drawPath(path, primary, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                 points.forEach { (date, value) -> drawCircle(primary, radius = 4.dp.toPx(), center = Offset(px(date), py(value))) }
             }
+            if (target != null) Hint("الخط المتقطع: الهدف ${formatNumber(target)} $unit")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Hint(points.first().first.toString())
                 Hint(points.last().first.toString())

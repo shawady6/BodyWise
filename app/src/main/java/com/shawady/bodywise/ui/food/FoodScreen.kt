@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,11 +45,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shawady.bodywise.data.DayNote
 import com.shawady.bodywise.data.FoodEntry
 import com.shawady.bodywise.data.MealSlot
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.Hint
+import com.shawady.bodywise.ui.components.NumberField
+import com.shawady.bodywise.util.formatNumber
+import com.shawady.bodywise.util.parseDecimal
 import com.shawady.bodywise.ui.components.SmallStat
 import com.shawady.bodywise.util.arabicDayFull
 import com.shawady.bodywise.util.arabicDayShort
@@ -62,6 +69,7 @@ fun FoodScreen(vm: BodyWiseViewModel) {
     val selected = vm.selectedDate
     val week = weekDays(selected)
     var editor by remember { mutableStateOf<FoodEditor?>(null) }
+    var noteEditor by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -146,9 +154,17 @@ fun FoodScreen(vm: BodyWiseViewModel) {
             }
         }
         item { WaterCard(vm, selected) }
+        item { NotesCard(vm, selected) { noteEditor = true } }
         item { WeeklySummary(vm, week, today) }
     }
 
+    if (noteEditor) {
+        NoteDialog(
+            initial = vm.noteFor(selected),
+            onSave = { vm.saveNote(selected, it); noteEditor = false },
+            onDismiss = { noteEditor = false }
+        )
+    }
     editor?.let { current ->
         FoodDialog(
             title = if (current.index == null) "إضافة ${current.slot.key}" else "تعديل ${current.slot.key}",
@@ -196,6 +212,10 @@ private fun WeeklySummary(vm: BodyWiseViewModel, week: List<LocalDate>, today: L
         Text("سجّلت وجبات في $loggedDays من 7 أيام")
         Text("متوسط المياه: ${"%.1f".format(avgWater)} كوب في اليوم")
         Text("أيام وصلت فيها لهدف المياه: $goalDays")
+        val sleeps = week.mapNotNull { vm.noteFor(it)?.sleepHours }
+        if (sleeps.isNotEmpty()) Text("متوسط النوم: ${"%.1f".format(sleeps.average())} ساعة")
+        val exerciseDays = week.count { (vm.noteFor(it)?.exerciseMinutes ?: 0) > 0 }
+        if (exerciseDays > 0) Text("أيام التمرين: $exerciseDays")
     }
 }
 
@@ -228,6 +248,72 @@ private fun FoodDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (name.isNotBlank()) onSave(FoodEntry(name.trim(), amount.trim())) }) { Text("حفظ") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+private val MOODS = listOf("😞", "😕", "😐", "🙂", "😄")
+
+@Composable
+private fun NotesCard(vm: BodyWiseViewModel, date: LocalDate, onEdit: () -> Unit) {
+    val note = vm.noteFor(date)
+    AppCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ملاحظات اليوم 📝", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, null)
+                Text(if (note == null) "إضافة" else "تعديل")
+            }
+        }
+        if (note == null) {
+            Hint("نوم، مزاج، تمرين، أو أي ملاحظة قصيرة.")
+        } else {
+            val parts = listOfNotNull(
+                note.mood?.let { "المزاج ${MOODS[it - 1]}" },
+                note.sleepHours?.let { "😴 ${formatNumber(it)} ساعة نوم" },
+                note.exerciseMinutes?.takeIf { it > 0 }?.let { "🏃 $it دقيقة تمرين" }
+            )
+            if (parts.isNotEmpty()) Text(parts.joinToString(" • "))
+            if (note.text.isNotBlank()) Hint(note.text)
+        }
+    }
+}
+
+@Composable
+private fun NoteDialog(initial: DayNote?, onSave: (DayNote) -> Unit, onDismiss: () -> Unit) {
+    var sleep by remember { mutableStateOf(initial?.sleepHours?.let { formatNumber(it) } ?: "") }
+    var exercise by remember { mutableStateOf(initial?.exerciseMinutes?.toString() ?: "") }
+    var mood by remember { mutableStateOf(initial?.mood) }
+    var text by remember { mutableStateOf(initial?.text ?: "") }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ملاحظات اليوم") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Hint("المزاج:")
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MOODS.forEachIndexed { index, emoji ->
+                        FilterChip(selected = mood == index + 1, onClick = { mood = if (mood == index + 1) null else index + 1 }, label = { Text(emoji) })
+                    }
+                }
+                NumberField("ساعات النوم", sleep, { sleep = it })
+                NumberField("دقائق التمرين", exercise, { exercise = it })
+                OutlinedTextField(text, { text = it }, label = { Text("ملاحظة") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val sleepValue = parseDecimal(sleep)
+                val exerciseValue = parseDecimal(exercise)?.toInt()
+                when {
+                    sleep.isNotBlank() && (sleepValue == null || sleepValue < 0 || sleepValue > 24) -> error = "ساعات النوم لازم تكون بين 0 و24"
+                    exercise.isNotBlank() && (exerciseValue == null || exerciseValue < 0 || exerciseValue > 600) -> error = "دقائق التمرين لازم تكون بين 0 و600"
+                    else -> onSave(DayNote(sleepValue, mood, exerciseValue, text.trim()))
+                }
+            }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )

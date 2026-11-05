@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 2
+    const val VERSION = 3
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -81,6 +81,35 @@ object SnapshotJson {
         ProgressPhoto(LocalDate.parse(item.getString("date")), File(item.getString("file")).name)
     }
 
+    fun notesToJson(notes: Map<String, DayNote>): JSONObject {
+        val json = JSONObject()
+        notes.forEach { (day, note) ->
+            if (!note.isEmpty) {
+                val item = JSONObject().put("text", note.text)
+                note.sleepHours?.let { item.put("sleep", formatNumber(it)) }
+                note.mood?.let { item.put("mood", it) }
+                note.exerciseMinutes?.let { item.put("exercise", it) }
+                json.put(day, item)
+            }
+        }
+        return json
+    }
+
+    fun notesFromJson(json: JSONObject): Map<String, DayNote> {
+        val result = LinkedHashMap<String, DayNote>()
+        json.keys().forEach { day ->
+            LocalDate.parse(day)
+            val item = json.getJSONObject(day)
+            result[day] = DayNote(
+                sleepHours = parseDecimal(item.optString("sleep")),
+                mood = if (item.has("mood")) item.getInt("mood").coerceIn(1, 5) else null,
+                exerciseMinutes = if (item.has("exercise")) item.getInt("exercise").coerceIn(0, 1000) else null,
+                text = item.optString("text")
+            )
+        }
+        return result
+    }
+
     fun toBackup(snapshot: Snapshot, exportedAt: LocalDate): JSONObject = JSONObject()
         .put("format", FORMAT)
         .put("version", VERSION)
@@ -89,7 +118,11 @@ object SnapshotJson {
         .put("water", waterToJson(snapshot.water))
         .put("measurements", measurementsToJson(snapshot.measurements))
         .put("photos", photosToJson(snapshot.photos))
-        .put("settings", JSONObject().put("waterGoal", snapshot.waterGoal))
+        .put("notes", notesToJson(snapshot.notes))
+        .put("settings", JSONObject()
+            .put("waterGoal", snapshot.waterGoal)
+            .put("heightCm", snapshot.heightCm?.let { formatNumber(it) } ?: "")
+            .put("targetWeight", snapshot.targetWeight?.let { formatNumber(it) } ?: ""))
 
     /** Strict: throws on anything that is not a valid BodyWise backup (v1 or v2). */
     fun fromBackup(json: JSONObject): Snapshot {
@@ -99,7 +132,10 @@ object SnapshotJson {
             water = waterFromJson(json.getJSONObject("water")),
             measurements = measurementsFromJson(json.getJSONArray("measurements")),
             photos = photosFromJson(json.optJSONArray("photos") ?: JSONArray()),
-            waterGoal = (json.optJSONObject("settings")?.optInt("waterGoal", 8) ?: 8).coerceIn(1, 30)
+            waterGoal = (json.optJSONObject("settings")?.optInt("waterGoal", 8) ?: 8).coerceIn(1, 30),
+            notes = json.optJSONObject("notes")?.let { notesFromJson(it) } ?: emptyMap(),
+            heightCm = parseDecimal(json.optJSONObject("settings")?.optString("heightCm").orEmpty()),
+            targetWeight = parseDecimal(json.optJSONObject("settings")?.optString("targetWeight").orEmpty())
         )
     }
 }

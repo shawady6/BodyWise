@@ -24,7 +24,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,6 +58,7 @@ import com.shawady.bodywise.security.AppLock
 import com.shawady.bodywise.ui.components.Hint
 import com.shawady.bodywise.ui.food.FoodScreen
 import com.shawady.bodywise.ui.progress.ProgressScreen
+import com.shawady.bodywise.ui.settings.OnboardingScreen
 import com.shawady.bodywise.ui.settings.SettingsScreen
 import com.shawady.bodywise.ui.theme.BodyWiseTheme
 import com.shawady.bodywise.update.UpdateViewModel
@@ -98,8 +101,17 @@ fun BodyWiseApp(activity: FragmentActivity) {
                     appLock.authenticate({ unlocked = true }, { lockMessage = it })
                 }
             }
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) vm.reloadWater()
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             if (vm.settings.appLock && !unlocked) {
                 LockScreen(lockMessage) { appLock.authenticate({ unlocked = true }, { lockMessage = it }) }
+            } else if (!vm.settings.onboarded) {
+                OnboardingScreen(vm)
             } else {
                 MainScaffold(vm, updateVm, appLock)
             }
@@ -139,6 +151,11 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
             snackbar.showSnackbar(it)
             vm.toast = null
         }
+    }
+    LaunchedEffect(vm.undoRequest) {
+        val request = vm.undoRequest ?: return@LaunchedEffect
+        val result = snackbar.showSnackbar(request.message, actionLabel = "تراجع", duration = SnackbarDuration.Long)
+        vm.resolveUndo(request, result == SnackbarResult.ActionPerformed)
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

@@ -1,6 +1,8 @@
 package com.shawady.bodywise.data
 
 import android.content.Context
+import com.shawady.bodywise.util.formatNumber
+import com.shawady.bodywise.util.parseDecimal
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -16,7 +18,10 @@ class BodyWiseStore(private val context: Context) {
         water = runCatching { SnapshotJson.waterFromJson(JSONObject(prefs.getString("water", "{}") ?: "{}")) }.getOrDefault(emptyMap()),
         measurements = runCatching { SnapshotJson.measurementsFromJson(JSONArray(prefs.getString("measurements", "[]") ?: "[]")) }.getOrDefault(emptyList()),
         photos = runCatching { SnapshotJson.photosFromJson(JSONArray(prefs.getString("photos", "[]") ?: "[]")) }.getOrDefault(emptyList()),
-        waterGoal = prefs.getInt("water_goal", 8).coerceIn(1, 30)
+        waterGoal = prefs.getInt("water_goal", 8).coerceIn(1, 30),
+        notes = runCatching { SnapshotJson.notesFromJson(JSONObject(prefs.getString("notes", "{}") ?: "{}")) }.getOrDefault(emptyMap()),
+        heightCm = prefs.getString("height_cm", null)?.let { parseDecimal(it) },
+        targetWeight = prefs.getString("target_weight", null)?.let { parseDecimal(it) }
     )
 
     fun save(snapshot: Snapshot) {
@@ -26,6 +31,9 @@ class BodyWiseStore(private val context: Context) {
             .putString("measurements", SnapshotJson.measurementsToJson(snapshot.measurements).toString())
             .putString("photos", SnapshotJson.photosToJson(snapshot.photos).toString())
             .putInt("water_goal", snapshot.waterGoal)
+            .putString("notes", SnapshotJson.notesToJson(snapshot.notes).toString())
+            .putString("height_cm", snapshot.heightCm?.let { formatNumber(it) })
+            .putString("target_weight", snapshot.targetWeight?.let { formatNumber(it) })
             .apply()
     }
 }
@@ -41,7 +49,8 @@ class SettingsStore(context: Context) {
             waterReminders = prefs.getBoolean("water_reminders", false),
             weeklyReminder = prefs.getBoolean("weekly_reminder", false),
             autoBackupUri = prefs.getString("auto_backup_uri", null),
-            lastAutoBackup = prefs.getString("last_auto_backup", null)
+            lastAutoBackup = prefs.getString("last_auto_backup", null),
+            onboarded = prefs.getBoolean("onboarded", false)
         )
     }
 
@@ -53,6 +62,7 @@ class SettingsStore(context: Context) {
             .putBoolean("weekly_reminder", settings.weeklyReminder)
             .putString("auto_backup_uri", settings.autoBackupUri)
             .putString("last_auto_backup", settings.lastAutoBackup)
+            .putBoolean("onboarded", settings.onboarded)
             .apply()
     }
 }

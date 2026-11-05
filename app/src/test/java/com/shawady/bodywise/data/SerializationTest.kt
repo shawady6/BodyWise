@@ -17,7 +17,10 @@ class SerializationTest {
             Measurement("a2", LocalDate.of(2026, 11, 8), mapOf(Metric.WEIGHT to 81.0))
         ),
         photos = listOf(ProgressPhoto(LocalDate.of(2026, 11, 1), "progress_1.jpg")),
-        waterGoal = 10
+        waterGoal = 10,
+        notes = mapOf("2026-11-05" to DayNote(7.5, 4, 30, "نمت كويس")),
+        heightCm = 175.0,
+        targetWeight = 78.0
     )
 
     @Test
