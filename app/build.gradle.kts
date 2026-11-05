@@ -28,8 +28,8 @@ android {
         applicationId = "com.shawady.bodywise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.2.5"
+        versionCode = 8
+        versionName = "0.2.6"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -54,4 +54,5 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation("junit:junit:4.13.2")
 }

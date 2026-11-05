@@ -2,7 +2,6 @@ package com.shawady.bodywise
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
@@ -131,6 +130,9 @@ private fun BodyWiseApp() {
     val photos = remember { mutableStateListOf<ProgressPhoto>() }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var dialogMeal by remember { mutableStateOf<String?>(null) }
+    var measureToDelete by remember { mutableStateOf<Measure?>(null) }
+    var photoToDelete by remember { mutableStateOf<ProgressPhoto?>(null) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var latestVersion by remember { mutableStateOf<String?>(null) }
     var updateAvailable by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf("لم يتم التحقق بعد") }
@@ -223,66 +225,25 @@ private fun BodyWiseApp() {
     }
 
     val importBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            scope.launch {
-                backupMessage = "جاري فحص النسخة الاحتياطية..."
-                val result = withContext(Dispatchers.IO) { runCatching { readBackupZip(context, uri) } }
-                result.onSuccess { (backup, tempDir) ->
-                    try {
-                        val mealsJson = backup.getJSONObject("meals")
-                        val waterJson = backup.getJSONObject("water")
-                        val measurementsJson = backup.getJSONArray("measurements")
-                        val sourcePhotos = backup.optJSONArray("photos") ?: JSONArray()
-                        val restoredPhotoJson = JSONArray()
-                        val restoredPhotoItems = mutableListOf<ProgressPhoto>()
-                        for (i in 0 until sourcePhotos.length()) {
-                            val item = sourcePhotos.getJSONObject(i)
-                            val oldName = File(item.getString("file")).name
-                            val source = File(File(tempDir, "photos"), oldName)
-                            if (source.isFile) {
-                                val restoredName = "progress_restored_${System.currentTimeMillis()}_$i.jpg"
-                                source.copyTo(File(context.filesDir, restoredName), overwrite = true)
-                                val date = item.optString("date", LocalDate.now().toString())
-                                restoredPhotoJson.put(JSONObject().put("date", date).put("file", restoredName))
-                                restoredPhotoItems.add(ProgressPhoto(date, restoredName))
-                            }
-                        }
-
-                        prefs.edit()
-                            .putString("meals", mealsJson.toString())
-                            .putString("water", waterJson.toString())
-                            .putString("measurements", measurementsJson.toString())
-                            .putString("photos", restoredPhotoJson.toString())
-                            .apply()
-
-                        meals.clear()
-                        mealsJson.keys().forEach { key ->
-                            val array = mealsJson.getJSONArray(key)
-                            meals[key] = MutableList(array.length()) { index ->
-                                val item = array.getJSONObject(index)
-                                Food(item.getString("name"), item.optString("amount"))
-                            }
-                        }
-                        water.clear()
-                        waterJson.keys().forEach { key -> water[key] = waterJson.getInt(key) }
-                        measurements.clear()
-                        for (i in 0 until measurementsJson.length()) {
-                            val item = measurementsJson.getJSONObject(i)
-                            measurements.add(Measure(item.getString("date"), item.optString("weight"), item.optString("belly"), item.optString("waist"), item.optString("chest"), item.optString("arm"), item.optString("thigh")))
-                        }
-                        photos.clear()
-                        photos.addAll(restoredPhotoItems)
-                        backupMessage = "تمت استعادة البيانات و${restoredPhotoItems.size} صورة بنجاح."
-                    } catch (error: Exception) {
-                        backupMessage = "تعذرت استعادة النسخة: ${error.message ?: "ملف غير صالح"}"
-                    } finally {
-                        tempDir.deleteRecursively()
-                    }
-                }.onFailure { backupMessage = "الملف غير صالح أو تعذر قراءته: ${it.message ?: "خطأ غير معروف"}" }
-            }
-        }
+        if (uri != null) pendingRestoreUri = uri
     }
 
+    fun performRestore(uri: Uri) {
+        scope.launch {
+            backupMessage = "جاري فحص واستعادة النسخة الاحتياطية..."
+            val result = withContext(Dispatchers.IO) { runCatching { parseBackup(context, uri) } }
+            result.onSuccess { restored ->
+                val oldPhotoFiles = photos.map { it.file }
+                meals.clear(); meals.putAll(restored.meals)
+                water.clear(); water.putAll(restored.water)
+                measurements.clear(); measurements.addAll(restored.measurements)
+                photos.clear(); photos.addAll(restored.photos)
+                saveAll()
+                oldPhotoFiles.forEach { File(context.filesDir, it).delete() }
+                backupMessage = "تمت استعادة البيانات و${restored.photos.size} صورة بنجاح."
+            }.onFailure { backupMessage = "تعذرت الاستعادة ولم يتم تغيير بياناتك: ${it.message ?: "ملف غير صالح"}" }
+        }
+    }
 
     MaterialTheme(colorScheme = if (dark) darkColorScheme(primary=androidx.compose.ui.graphics.Color(0xFF8BC49B)) else lightColorScheme(primary=green, secondary=green, background=androidx.compose.ui.graphics.Color(0xFFF6F8F5), surface=androidx.compose.ui.graphics.Color.White)) {
         Scaffold(
@@ -304,7 +265,7 @@ private fun BodyWiseApp() {
                 }
                 when(page) {
                     0 -> {
-                        val weekStart = LocalDate.now().with(java.time.DayOfWeek.SATURDAY)
+                        val weekStart = weekStartFor(LocalDate.now())
                         val week = (0..6).map { weekStart.plusDays(it.toLong()) }
                         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),modifier=Modifier.fillMaxWidth()) {
                             week.forEach { day ->
@@ -410,14 +371,19 @@ private fun BodyWiseApp() {
                                                 Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("المعرض")
                                             }
                                         }
-                                        photos.forEach { photo ->
-                                            val bitmap=remember(photo.file) { BitmapFactory.decodeFile(File(context.filesDir,photo.file).absolutePath)?.asImageBitmap() }
-                                            if(bitmap!=null) {
-                                                Image(bitmap,null,modifier=Modifier.fillMaxWidth().height(190.dp))
-                                                Text(photo.date,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                        }
                                         Text("الصور محفوظة داخل التطبيق على جهازك فقط.",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            if(photos.isEmpty()) item { Text("لسه مفيش صور تقدم.",color=MaterialTheme.colorScheme.onSurfaceVariant) }
+                            items(photos,key={it.file}) { photo ->
+                                Card(shape=RoundedCornerShape(18.dp)) {
+                                    Column(Modifier.padding(12.dp)) {
+                                        PhotoThumb(File(context.filesDir,photo.file))
+                                        Row(verticalAlignment=Alignment.CenterVertically) {
+                                            Text(photo.date,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.weight(1f))
+                                            IconButton(onClick={photoToDelete=photo}) { Icon(Icons.Default.DeleteOutline,"حذف الصورة") }
+                                        }
                                     }
                                 }
                             }
@@ -426,9 +392,11 @@ private fun BodyWiseApp() {
                                 if(measurements.isEmpty()) Text("لسه مفيش قياسات مسجلة.",color=MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             items(measurements) { m ->
-                                Card { Column(Modifier.padding(14.dp)) {
+                                Card { Row(Modifier.padding(start=14.dp,top=6.dp,bottom=6.dp,end=4.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) {
                                     Text(m.date,fontWeight=FontWeight.Bold)
                                     Text(listOfNotNull(m.weight.takeIf{it.isNotBlank()}?.let{"الوزن: $it كجم"},m.belly.takeIf{it.isNotBlank()}?.let{"البطن: $it سم"},m.waist.takeIf{it.isNotBlank()}?.let{"الخصر: $it سم"},m.chest.takeIf{it.isNotBlank()}?.let{"الصدر: $it سم"},m.arm.takeIf{it.isNotBlank()}?.let{"الذراع: $it سم"},m.thigh.takeIf{it.isNotBlank()}?.let{"الفخذ: $it سم"}).joinToString(" • "),fontSize=12.sp)
+                                }
+                                IconButton(onClick={measureToDelete=m}) { Icon(Icons.Default.DeleteOutline,"حذف القياس") }
                                 } }
                             }
                         }
@@ -620,6 +588,23 @@ private fun BodyWiseApp() {
         }
     }
 
+    measureToDelete?.let { target ->
+        AlertDialog(onDismissRequest={measureToDelete=null},title={Text("حذف القياس؟")},text={Text("سيتم حذف قياسات ${target.date} نهائيًا.")},
+            confirmButton={TextButton(onClick={measurements.remove(target);saveAll();measureToDelete=null}){Text("حذف")}},
+            dismissButton={TextButton(onClick={measureToDelete=null}){Text("إلغاء")}})
+    }
+    photoToDelete?.let { target ->
+        AlertDialog(onDismissRequest={photoToDelete=null},title={Text("حذف الصورة؟")},text={Text("سيتم حذف صورة ${target.date} من جهازك نهائيًا.")},
+            confirmButton={TextButton(onClick={photos.remove(target);File(context.filesDir,target.file).delete();saveAll();photoToDelete=null}){Text("حذف")}},
+            dismissButton={TextButton(onClick={photoToDelete=null}){Text("إلغاء")}})
+    }
+    pendingRestoreUri?.let { uri ->
+        AlertDialog(onDismissRequest={pendingRestoreUri=null},title={Text("استبدال البيانات الحالية؟")},
+            text={Text("الاستعادة ستستبدل الوجبات والمياه والقياسات والصور الحالية بمحتوى النسخة المختارة، ولا يمكن التراجع. لو الملف غير صالح لن يتغير شيء.")},
+            confirmButton={TextButton(onClick={pendingRestoreUri=null;performRestore(uri)}){Text("استبدال")}},
+            dismissButton={TextButton(onClick={pendingRestoreUri=null}){Text("إلغاء")}})
+    }
+
     if(dialogMeal!=null) {
         var name by remember(dialogMeal) { mutableStateOf("") }
         var amount by remember(dialogMeal) { mutableStateOf("") }
@@ -726,14 +711,66 @@ private fun NumberField(label:String,value:String,onChange:(String)->Unit){
     OutlinedTextField(value,onChange,label={Text(label)},singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
 }
 
-private fun versionIsNewer(latest: String, current: String): Boolean {
-    fun parts(value: String) = value.removePrefix("v").removePrefix("V").split(".").map { it.toIntOrNull() ?: 0 }
-    val a = parts(latest)
-    val b = parts(current)
-    for (i in 0 until maxOf(a.size, b.size)) {
-        val x = a.getOrElse(i) { 0 }
-        val y = b.getOrElse(i) { 0 }
-        if (x != y) return x > y
+private class RestoredData(
+    val meals: Map<String, MutableList<Food>>,
+    val water: Map<String, Int>,
+    val measurements: List<Measure>,
+    val photos: List<ProgressPhoto>
+)
+
+/** Reads and fully validates a backup before anything in the app is changed. */
+private fun parseBackup(context: Context, uri: Uri): RestoredData {
+    val (backup, tempDir) = readBackupZip(context, uri)
+    val copied = mutableListOf<File>()
+    try {
+        val mealsJson = backup.getJSONObject("meals")
+        val meals = LinkedHashMap<String, MutableList<Food>>()
+        mealsJson.keys().forEach { key ->
+            val array = mealsJson.getJSONArray(key)
+            meals[key] = MutableList(array.length()) { index ->
+                val item = array.getJSONObject(index)
+                Food(item.getString("name"), item.optString("amount"))
+            }
+        }
+        val waterJson = backup.getJSONObject("water")
+        val water = LinkedHashMap<String, Int>()
+        waterJson.keys().forEach { key -> water[key] = waterJson.getInt(key) }
+        val measurementsJson = backup.getJSONArray("measurements")
+        val measurements = (0 until measurementsJson.length()).map { i ->
+            val item = measurementsJson.getJSONObject(i)
+            Measure(item.getString("date"), item.optString("weight"), item.optString("belly"), item.optString("waist"), item.optString("chest"), item.optString("arm"), item.optString("thigh"))
+        }
+        val sourcePhotos = backup.optJSONArray("photos") ?: JSONArray()
+        val photos = mutableListOf<ProgressPhoto>()
+        for (i in 0 until sourcePhotos.length()) {
+            val item = sourcePhotos.getJSONObject(i)
+            val source = File(File(tempDir, "photos"), File(item.getString("file")).name)
+            if (source.isFile) {
+                val restoredName = "progress_restored_${System.currentTimeMillis()}_$i.jpg"
+                val target = File(context.filesDir, restoredName)
+                source.copyTo(target, overwrite = true)
+                copied.add(target)
+                photos.add(ProgressPhoto(item.optString("date", LocalDate.now().toString()), restoredName))
+            }
+        }
+        return RestoredData(meals, water, measurements, photos)
+    } catch (error: Exception) {
+        copied.forEach { it.delete() }
+        throw error
+    } finally {
+        tempDir.deleteRecursively()
     }
-    return false
+}
+
+@Composable
+private fun PhotoThumb(file: File) {
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, file.absolutePath) {
+        value = withContext(Dispatchers.IO) { decodeSampledBitmap(file.absolutePath)?.asImageBitmap() }
+    }
+    val image = bitmap
+    if (image != null) {
+        Image(image, null, modifier = Modifier.fillMaxWidth().height(190.dp))
+    } else {
+        Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+    }
 }
