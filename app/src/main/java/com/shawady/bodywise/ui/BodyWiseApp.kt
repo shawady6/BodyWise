@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.MonitorHeart
@@ -65,6 +66,7 @@ import com.shawady.bodywise.ui.settings.OnboardingScreen
 import com.shawady.bodywise.ui.settings.SettingsScreen
 import com.shawady.bodywise.ui.theme.BodyWiseTheme
 import com.shawady.bodywise.ui.vitals.VitalsScreen
+import com.shawady.bodywise.ui.home.HomeScreen
 import com.shawady.bodywise.ui.meds.MedsScreen
 import com.shawady.bodywise.update.UpdateViewModel
 import kotlinx.coroutines.delay
@@ -167,10 +169,11 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي") })
-                NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي") })
-                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي") })
-                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي") })
+                NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية", fontSize = 10.sp, maxLines = 1) })
+                NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي", fontSize = 10.sp, maxLines = 1) })
+                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي", fontSize = 10.sp, maxLines = 1) })
+                NavigationBarItem(tab == 3, { tab = 3 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي", fontSize = 10.sp, maxLines = 1) })
+                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي", fontSize = 10.sp, maxLines = 1) })
             }
         }
     ) { padding ->
@@ -181,14 +184,15 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                     Text("خطوة صغيرة كل يوم 💚", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.labelMedium)
-                IconButton(onClick = { tab = if (tab == 3) 0 else 3 }) {
-                    Icon(Icons.Default.Settings, "الإعدادات", tint = if (tab == 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = { tab = if (tab == 5) 0 else 5 }) {
+                    Icon(Icons.Default.Settings, "الإعدادات", tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             when (tab) {
-                0 -> FoodScreen(vm)
-                1 -> ProgressScreen(vm)
-                2 -> VitalsScreen(vm)
+                0 -> HomeScreen(vm) { tab = it }
+                1 -> FoodScreen(vm)
+                2 -> ProgressScreen(vm)
+                3 -> VitalsScreen(vm)
                 4 -> MedsScreen(vm)
                 else -> SettingsScreen(vm, updateVm, appLock.isAvailable())
             }
