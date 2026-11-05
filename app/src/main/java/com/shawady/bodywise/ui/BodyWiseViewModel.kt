@@ -261,7 +261,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val dest = File(store.photosDir, "med_${System.currentTimeMillis()}.jpg")
             val ok = withContext(Dispatchers.IO) {
-                runCatching { importPhoto(open, dest, 1280) }.getOrDefault(false).also { if (!it) dest.delete() }
+                runCatching { importPhoto(open, dest, 2048) }.getOrDefault(false).also { if (!it) dest.delete() }
             }
             if (!ok) toast = "تعذر حفظ الصورة"
             onDone(if (ok) dest.name else null)
@@ -396,6 +396,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setThemeMode(mode: Int) = update { it.copy(themeMode = mode) }
     fun setAppLock(enabled: Boolean) = update { it.copy(appLock = enabled) }
+
+    fun setMedTone(uri: String?) {
+        update { it.copy(medTone = uri) }
+        com.shawady.bodywise.notify.MedAlarms.ensureChannel(getApplication())
+    }
 
     fun setWaterReminders(enabled: Boolean) {
         update { it.copy(waterReminders = enabled) }

@@ -145,7 +145,12 @@ object SnapshotJson {
                 .put("instruction", m.instruction).put("notes", m.notes)
                 .put("photo", m.photo?.let { java.io.File(it).name } ?: "")
                 .put("remaining", m.remaining?.let { formatNumber(it) } ?: "")
-                .put("createdAt", m.createdAt.toString()))
+                .put("createdAt", m.createdAt.toString())
+                .put("stripsPerBox", m.stripsPerBox?.toString() ?: "")
+                .put("unitsPerStrip", m.unitsPerStrip?.toString() ?: "")
+                .put("unitsPerBox", m.unitsPerBox?.let { formatNumber(it) } ?: "")
+                .put("fullQuantity", m.fullQuantity?.let { formatNumber(it) } ?: "")
+                .put("price", m.price?.let { formatNumber(it) } ?: ""))
         }
         return array
     }
@@ -167,7 +172,12 @@ object SnapshotJson {
             notes = item.optString("notes"),
             photo = item.optString("photo").takeIf { it.isNotBlank() }?.let { java.io.File(it).name },
             remaining = parseDecimal(item.optString("remaining")),
-            createdAt = java.time.LocalDateTime.parse(item.getString("createdAt"))
+            createdAt = java.time.LocalDateTime.parse(item.getString("createdAt")),
+            stripsPerBox = item.optString("stripsPerBox").toIntOrNull(),
+            unitsPerStrip = item.optString("unitsPerStrip").toIntOrNull(),
+            unitsPerBox = parseDecimal(item.optString("unitsPerBox")),
+            fullQuantity = parseDecimal(item.optString("fullQuantity")),
+            price = parseDecimal(item.optString("price"))
         )
     }
 

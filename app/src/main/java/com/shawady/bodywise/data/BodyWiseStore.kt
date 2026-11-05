@@ -54,7 +54,8 @@ class SettingsStore(context: Context) {
             weeklyReminder = prefs.getBoolean("weekly_reminder", false),
             autoBackupUri = prefs.getString("auto_backup_uri", null),
             lastAutoBackup = prefs.getString("last_auto_backup", null),
-            onboarded = prefs.getBoolean("onboarded", false)
+            onboarded = prefs.getBoolean("onboarded", false),
+            medTone = prefs.getString("med_tone", null)
         )
     }
 
@@ -67,6 +68,7 @@ class SettingsStore(context: Context) {
             .putString("auto_backup_uri", settings.autoBackupUri)
             .putString("last_auto_backup", settings.lastAutoBackup)
             .putBoolean("onboarded", settings.onboarded)
+            .putString("med_tone", settings.medTone)
             .apply()
     }
 }

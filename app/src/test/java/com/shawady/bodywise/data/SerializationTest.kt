@@ -32,7 +32,8 @@ class SerializationTest {
             Medication(
                 "m1", "بنادول", "1", "قرص", listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
                 setOf(DayOfWeek.SATURDAY, DayOfWeek.MONDAY), LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30),
-                "بعد الأكل", "مع مية", "med_1.jpg", 20.0, LocalDateTime.of(2026, 11, 1, 7, 0)
+                "بعد الأكل", "مع مية", "med_1.jpg", 20.0, LocalDateTime.of(2026, 11, 1, 7, 0),
+                2, 10, 20.0, 40.0, 55.5
             )
         ),
         doseLogs = listOf(DoseLog("m1", LocalDate.of(2026, 11, 5), LocalTime.of(8, 0), DoseStatus.TAKEN, LocalDateTime.of(2026, 11, 5, 8, 5), 1))

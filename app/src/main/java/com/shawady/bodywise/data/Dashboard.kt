@@ -1,5 +1,6 @@
 package com.shawady.bodywise.data
 
+import com.shawady.bodywise.util.format12
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -25,7 +26,7 @@ fun dashboardAlerts(
         }
     }
     todaySlots.forEach { (slot, state) ->
-        val t = slot.time.toString().take(5)
+        val t = slot.time.format12()
         when (state) {
             SlotState.MISSED -> alerts.add(DashAlert("فاتتك جرعة ${slot.med.name} (${t})", false))
             SlotState.DUE, SlotState.SNOOZED -> alerts.add(DashAlert("وقت ${slot.med.name} دلوقتي (${t})", false))
@@ -33,8 +34,7 @@ fun dashboardAlerts(
         }
     }
     meds.forEach { med ->
-        val left = med.remaining ?: return@forEach
-        if (left <= med.doseAmount() * med.times.size * 3) alerts.add(DashAlert("${med.name} قرب يخلص", false))
+        if (med.needsRefill()) alerts.add(DashAlert("${med.name} محتاج تجديد", false))
     }
     if (now.hour >= 18 && waterToday < waterGoal) alerts.add(DashAlert("لسه ناقصك ${waterGoal - waterToday} أكواب مية النهارده", false))
     if (lastMeasurement != null && Duration.between(lastMeasurement.atStartOfDay(), now).toDays() >= 7) {

@@ -181,9 +181,12 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("BODYWISE", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                    Text("خطوة صغيرة كل يوم 💚", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        when (tab) { 0 -> "الرئيسية"; 1 -> "غذائي"; 2 -> "قياساتي"; 3 -> "حيوياتي"; 4 -> "روشتتي"; else -> "الإعدادات" },
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold
+                    )
                 }
-                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.labelMedium)
+                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = { tab = if (tab == 5) 0 else 5 }) {
                     Icon(Icons.Default.Settings, "الإعدادات", tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }

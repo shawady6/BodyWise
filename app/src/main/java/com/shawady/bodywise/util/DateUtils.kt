@@ -21,3 +21,9 @@ fun arabicDayShort(date: LocalDate): String = date.dayOfWeek.getDisplayName(Text
 fun arabicDayFull(date: LocalDate): String = date.dayOfWeek.getDisplayName(TextStyle.FULL, arabic)
 fun arabicMonth(date: LocalDate): String = date.month.getDisplayName(TextStyle.FULL, arabic)
 fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${arabicMonth(date)}"
+
+/** 12-hour clock with Arabic AM/PM, e.g. "8:05 ص". */
+fun java.time.LocalTime.format12(): String {
+    val h = if (hour % 12 == 0) 12 else hour % 12
+    return "$h:${minute.toString().padStart(2, '0')} ${if (hour < 12) "ص" else "م"}"
+}

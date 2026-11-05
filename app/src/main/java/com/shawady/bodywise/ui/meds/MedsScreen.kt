@@ -1,9 +1,12 @@
 package com.shawady.bodywise.ui.meds
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -22,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -32,19 +36,26 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,24 +65,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.shawady.bodywise.data.DoseSlot
 import com.shawady.bodywise.data.DoseStatus
 import com.shawady.bodywise.data.MED_INSTRUCTIONS
 import com.shawady.bodywise.data.MED_UNITS
 import com.shawady.bodywise.data.Medication
+import com.shawady.bodywise.data.STRIP_UNITS
 import com.shawady.bodywise.data.SlotState
-import com.shawady.bodywise.data.doseAmount
+import com.shawady.bodywise.data.needsRefill
+import com.shawady.bodywise.data.percentLeft
+import com.shawady.bodywise.data.refilled
 import com.shawady.bodywise.data.slotState
 import com.shawady.bodywise.data.slotsFor
+import com.shawady.bodywise.data.suggestTimes
 import com.shawady.bodywise.notify.MedAlarms
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.Hint
 import com.shawady.bodywise.ui.components.NumberField
 import com.shawady.bodywise.ui.components.PhotoThumb
+import com.shawady.bodywise.ui.components.SectionTitle
+import com.shawady.bodywise.util.format12
 import com.shawady.bodywise.util.formatNumber
 import com.shawady.bodywise.util.parseDecimal
+import com.shawady.bodywise.util.recognizeDrugNames
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -88,73 +112,76 @@ private val weekOrder = listOf(
 )
 private val arabic = Locale("ar")
 private fun DayOfWeek.arabicName(): String = getDisplayName(TextStyle.FULL, arabic)
-private fun LocalTime.hm(): String = toString().take(5)
 private val red = Color(0xFFD32F2F)
 private val amber = Color(0xFFE08A00)
 private val green = Color(0xFF2E7D32)
 
 private fun Medication.doseText(): String = listOf(dose, unit).filter { it.isNotBlank() }.joinToString(" ")
 
+private fun Medication.stockText(): String? {
+    val left = remaining ?: return null
+    val perBox = unitsPerBox
+    val boxes = if (perBox != null && perBox > 0) " (${formatNumber(Math.round(left / perBox * 10) / 10.0)} علبة)" else ""
+    return "${formatNumber(Math.round(left * 10) / 10.0)} $unit$boxes"
+}
+
+private fun Medication.packagingText(): String? = when {
+    stripsPerBox != null && unitsPerStrip != null -> "العلبة: $stripsPerBox شريط × $unitsPerStrip $unit"
+    unitsPerBox != null -> "العلبة: ${formatNumber(unitsPerBox)} $unit"
+    else -> null
+}
+
 @Composable
 fun MedsScreen(vm: BodyWiseViewModel) {
     val now by produceState(LocalDateTime.now()) {
         while (true) { delay(30_000); value = LocalDateTime.now() }
     }
+    var sub by rememberSaveable { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<Medication?>(null) }
     var adding by remember { mutableStateOf(false) }
-    val today = now.toLocalDate()
-    val todaySlots = slotsFor(vm.medications, today)
+    var refilling by remember { mutableStateOf<Medication?>(null) }
+    val refillList = vm.medications.filter { it.needsRefill() }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        AppCard {
-            Text("جرعات النهارده", fontWeight = FontWeight.Bold)
-            if (todaySlots.isEmpty()) Hint(if (vm.medications.isEmpty()) "لسه ما أضفتش أدوية." else "مفيش جرعات النهارده.")
-            todaySlots.forEach { slot -> SlotRow(vm, slot, slotState(slot, vm.doseLogs, now)) }
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = sub, containerColor = Color.Transparent) {
+            Tab(selected = sub == 0, onClick = { sub = 0 }, text = { Text("الجرعات") })
+            Tab(selected = sub == 1, onClick = { sub = 1 }, text = { Text("الأدوية") })
+            Tab(
+                selected = sub == 2, onClick = { sub = 2 },
+                text = { Text(if (refillList.isNotEmpty()) "تجديد (${refillList.size})" else "تجديد", color = if (refillList.isNotEmpty()) red else Color.Unspecified) }
+            )
         }
-
-        Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, null)
-            Text("  إضافة دواء")
-        }
-
-        vm.medications.forEach { med ->
-            AppCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("💊 ${med.name}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Hint(listOf(med.doseText(), med.instruction.takeIf { it != "لا يهم" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" • "))
-                    }
-                    IconButton(onClick = { editing = med }) { Icon(Icons.Default.Edit, "تعديل") }
-                    IconButton(onClick = { vm.deleteMedication(med) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
-                }
-                Hint("المواعيد: " + med.times.joinToString(" • ") { it.hm() })
-                Hint("الأيام: " + if (med.days.isEmpty()) "كل يوم" else weekOrder.filter { it in med.days }.joinToString("، ") { it.arabicName() })
-                Hint("من ${med.startDate}" + (med.endDate?.let { " إلى $it" } ?: " (بدون نهاية)"))
-                med.remaining?.let { left ->
-                    val perDay = med.doseAmount() * med.times.size
-                    val low = left <= perDay * 3
-                    Text(
-                        "المتبقي: ${formatNumber(left)} ${med.unit}" + if (low) "  — قرب يخلص ⚠️" else "",
-                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (low) red else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                if (med.notes.isNotBlank()) Hint("ملاحظات: ${med.notes}")
-                med.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 110) }
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            when (sub) {
+                0 -> DosesTab(vm, now)
+                1 -> MedsTab(vm, onAdd = { adding = true }, onEdit = { editing = it })
+                else -> RefillTab(vm, refillList) { refilling = it }
             }
+            Hint("التطبيق بينظّم مواعيد الدواء بس، ومش بيغني عن تعليمات الدكتور أو الصيدلي.")
+            Spacer(Modifier.padding(8.dp))
         }
-
-        HistoryCard(vm, now)
-        AlertsCard()
-        Hint("التطبيق بينظّم مواعيد الدواء بس، ومش بيغني عن تعليمات الدكتور أو الصيدلي.")
-        Spacer(Modifier.padding(8.dp))
     }
 
     if (adding || editing != null) {
         MedDialog(vm, editing, onDismiss = { adding = false; editing = null }, onSave = { vm.saveMedication(it); adding = false; editing = null })
     }
+    refilling?.let { med -> RefillDialog(med, onDismiss = { refilling = null }, onSave = { vm.saveMedication(it); refilling = null }) }
+}
+
+// ---------------------------------------------------------------- doses
+
+@Composable
+private fun DosesTab(vm: BodyWiseViewModel, now: LocalDateTime) {
+    val todaySlots = slotsFor(vm.medications, now.toLocalDate())
+    AppCard {
+        SectionTitle("💊", "جرعات النهارده")
+        if (todaySlots.isEmpty()) Hint(if (vm.medications.isEmpty()) "لسه ما أضفتش أدوية. من تبويب \"الأدوية\"." else "مفيش جرعات النهارده.")
+        todaySlots.forEach { slot -> SlotRow(vm, slot, slotState(slot, vm.doseLogs, now)) }
+    }
+    HistoryCard(vm, now)
 }
 
 @Composable
@@ -169,8 +196,8 @@ private fun SlotRow(vm: BodyWiseViewModel, slot: DoseSlot, state: SlotState) {
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(slot.time.hm(), fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Text(slot.time.format12(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(slot.med.name, fontWeight = FontWeight.SemiBold)
                 Hint(slot.med.doseText())
             }
@@ -190,7 +217,7 @@ private fun SlotRow(vm: BodyWiseViewModel, slot: DoseSlot, state: SlotState) {
 @Composable
 private fun HistoryCard(vm: BodyWiseViewModel, now: LocalDateTime) {
     AppCard {
-        Text("سجل التناول (آخر 7 أيام)", fontWeight = FontWeight.Bold)
+        SectionTitle("🗓", "سجل التناول (آخر 7 أيام)")
         var any = false
         for (back in 0..6) {
             val day = now.toLocalDate().minusDays(back.toLong())
@@ -207,69 +234,206 @@ private fun HistoryCard(vm: BodyWiseViewModel, now: LocalDateTime) {
             states.forEach { (slot, state) ->
                 val log = vm.doseLogs[slot.key]
                 val mark = when (state) {
-                    SlotState.TAKEN -> "✅ اتاخدت ${log?.at?.toLocalTime()?.hm() ?: ""}"
+                    SlotState.TAKEN -> "✅ اتاخدت ${log?.at?.toLocalTime()?.format12() ?: ""}"
                     SlotState.SKIPPED -> "⏭ اتخطت"
                     SlotState.MISSED -> "❌ فاتت"
                     else -> "🔔 مستنية"
                 } + if ((log?.snoozes ?: 0) > 0) "  (اتأجلت ${log?.snoozes} مرة)" else ""
-                Hint("${slot.time.hm()}  ${slot.med.name}  —  $mark")
+                Hint("${slot.time.format12()}  ${slot.med.name}  —  $mark")
             }
         }
         if (!any) Hint("لسه مفيش سجل.")
     }
 }
 
+// ---------------------------------------------------------------- medications
+
 @Composable
-private fun AlertsCard() {
+private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medication) -> Unit) {
+    Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Add, null)
+        Text("  إضافة دواء")
+    }
+    vm.medications.forEach { med ->
+        AppCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("💊 ${med.name}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Hint(listOf(med.doseText(), med.instruction.takeIf { it != "لا يهم" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" • "))
+                }
+                IconButton(onClick = { onEdit(med) }) { Icon(Icons.Default.Edit, "تعديل") }
+                IconButton(onClick = { vm.deleteMedication(med) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
+            }
+            Hint("المواعيد: " + med.times.joinToString(" • ") { it.format12() })
+            Hint("الأيام: " + if (med.days.isEmpty()) "كل يوم" else weekOrder.filter { it in med.days }.joinToString("، ") { it.arabicName() })
+            Hint("من ${med.startDate}" + (med.endDate?.let { " إلى $it" } ?: " (بدون نهاية)"))
+            med.packagingText()?.let { Hint(it) }
+            med.stockText()?.let { stock ->
+                val low = med.needsRefill()
+                Text(
+                    "المتبقي: $stock" + if (low) "  — محتاج تجديد ⚠️" else "",
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (low) red else MaterialTheme.colorScheme.onSurface
+                )
+            }
+            med.price?.let { Hint("سعر العلبة: ${formatNumber(it)} ج.م") }
+            if (med.notes.isNotBlank()) Hint("ملاحظات: ${med.notes}")
+            med.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 110) }
+        }
+    }
+    AlertsCard(vm)
+}
+
+// ---------------------------------------------------------------- refill
+
+@Composable
+private fun RefillTab(vm: BodyWiseViewModel, refillList: List<Medication>, onRefill: (Medication) -> Unit) {
+    AppCard {
+        SectionTitle("🛒", "أدوية محتاجة تتجدد")
+        if (refillList.isEmpty()) Hint("كل أدويتك كميتها كويسة ✅ (أي دواء يقل عن 10% من آخر كمية اشتريتها هيظهر هنا).")
+        refillList.forEach { med ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(med.name, fontWeight = FontWeight.Bold)
+                med.stockText()?.let { Text("المتبقي: $it", color = red, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                val pct = med.percentLeft()
+                if (pct != null) {
+                    LinearProgressIndicator(progress = { pct / 100f }, color = red, modifier = Modifier.fillMaxWidth())
+                    Hint("باقي $pct% من الكمية")
+                }
+                med.price?.let { Hint("آخر سعر للعلبة: ${formatNumber(it)} ج.م") }
+                Button(onClick = { onRefill(med) }) { Text("جددت") }
+            }
+        }
+    }
+    AppCard {
+        SectionTitle("💰", "أسعار الأدوية")
+        if (vm.medications.none { it.price != null }) Hint("أضف سعر العلبة من شاشة تعديل الدواء علشان تعرف بكام في المستقبل.")
+        vm.medications.filter { it.price != null }.forEach { med ->
+            Row(Modifier.fillMaxWidth()) {
+                Text(med.name, modifier = Modifier.weight(1f))
+                Text("${formatNumber(med.price!!)} ج.م / علبة", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RefillDialog(med: Medication, onDismiss: () -> Unit, onSave: (Medication) -> Unit) {
+    var boxes by remember { mutableStateOf("1") }
+    var price by remember { mutableStateOf(med.price?.let { formatNumber(it) } ?: "") }
+    var perBox by remember { mutableStateOf(med.unitsPerBox?.let { formatNumber(it) } ?: "") }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تجديد ${med.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField("عدد العلب الجديدة", boxes, { boxes = it })
+                if (med.unitsPerBox == null) NumberField("عدد ${med.unit} في العلبة", perBox, { perBox = it })
+                NumberField("سعر العلبة (اختياري)", price, { price = it })
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val n = parseDecimal(boxes)
+                val per = med.unitsPerBox ?: parseDecimal(perBox)
+                val p = if (price.isBlank()) null else parseDecimal(price)
+                when {
+                    n == null || n <= 0 -> error = "اكتب عدد العلب"
+                    per == null || per <= 0 -> error = "اكتب عدد ${med.unit} في العلبة"
+                    price.isNotBlank() && p == null -> error = "السعر مش رقم صحيح"
+                    else -> onSave(med.copy(unitsPerBox = per).refilled(n, p))
+                }
+            }) { Text("حفظ") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+// ---------------------------------------------------------------- alerts settings
+
+@Composable
+private fun AlertsCard(vm: BodyWiseViewModel) {
     val context = LocalContext.current
-    var refresh by remember { mutableStateOf(0) }
+    var refresh by remember { mutableIntStateOf(0) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
+    val tonePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            @Suppress("DEPRECATION")
+            val picked = result.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            vm.setMedTone(picked?.toString())
+        }
+    }
     @Suppress("UNUSED_EXPRESSION") refresh
+    val manager = context.getSystemService(NotificationManager::class.java)
     val notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
     val batteryOk = context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
     val exactOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    val fullScreenOk = Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent()
+    val overlayOk = Settings.canDrawOverlays(context)
+    val toneUri = vm.settings.medTone?.let { Uri.parse(it) }
+    val toneTitle = remember(vm.settings.medTone) {
+        runCatching { toneUri?.let { RingtoneManager.getRingtone(context, it)?.getTitle(context) } }.getOrNull() ?: "نغمة المنبه الافتراضية"
+    }
 
     AppCard {
-        Text("إعدادات التنبيهات", fontWeight = FontWeight.Bold)
+        SectionTitle("🔔", "إعدادات التنبيهات")
         StatusLine("الإشعارات", notificationsOn)
         StatusLine("المواعيد الدقيقة", exactOk)
+        StatusLine("الشاشة الكاملة وقت القفل", fullScreenOk)
+        StatusLine("الشاشة الكاملة والموبايل مفتوح", overlayOk)
         StatusLine("استثناء من توفير البطارية", batteryOk)
         if (!notificationsOn) {
             Button(onClick = {
-                if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS) else openAppNotificationSettings(context)
+                if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS) else open(context, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
             }, modifier = Modifier.fillMaxWidth()) { Text("تفعيل الإشعارات") }
-            OutlinedButton(onClick = { openAppNotificationSettings(context) }, modifier = Modifier.fillMaxWidth()) { Text("لو مش بتظهر: افتح إعدادات الإشعارات") }
         }
-        if (!exactOk) {
+        if (!exactOk) OutlinedButton(onClick = {
+            open(context, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
+        }, modifier = Modifier.fillMaxWidth()) { Text("السماح بالمواعيد الدقيقة") }
+        if (!fullScreenOk) OutlinedButton(onClick = {
+            open(context, Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", Uri.parse("package:${context.packageName}")))
+        }, modifier = Modifier.fillMaxWidth()) { Text("السماح بالشاشة الكاملة") }
+        if (!overlayOk) {
             OutlinedButton(onClick = {
-                runCatching {
-                    context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            }, modifier = Modifier.fillMaxWidth()) { Text("السماح بالمواعيد الدقيقة") }
+                open(context, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+            }, modifier = Modifier.fillMaxWidth()) { Text("الظهور فوق التطبيقات (شاشة كاملة والموبايل مفتوح)") }
+            Hint("من غيرها، لو الموبايل مفتوح بيظهر إشعار كبير فوق بدل الشاشة الكاملة.")
         }
         if (!batteryOk) {
             OutlinedButton(onClick = {
-                runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                open(context, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }, modifier = Modifier.fillMaxWidth()) { Text("استثناء BodyWise من توفير البطارية") }
             Hint("في بعض الموبايلات (شاومي، سامسونج، أوبو...) لازم ده علشان التنبيه يشتغل والتطبيق مقفول.")
         }
         OutlinedButton(onClick = {
-            runCatching {
-                context.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    putExtra(Settings.EXTRA_CHANNEL_ID, MedAlarms.CHANNEL)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                })
-            }
-        }, modifier = Modifier.fillMaxWidth()) { Text("صوت واهتزاز التنبيه") }
+            tonePicker.launch(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_RINGTONE)
+                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "نغمة تنبيه الدواء")
+                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, toneUri)
+            })
+        }, modifier = Modifier.fillMaxWidth()) { Text("🎵 نغمة التنبيه: $toneTitle") }
+        Hint("لو عايز نغمتك الخاصة، حطها في فولدر Alarms أو Ringtones في الموبايل وهتظهر في القائمة.")
+        OutlinedButton(onClick = {
+            open(context, Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, MedAlarms.channelId(context))
+            })
+        }, modifier = Modifier.fillMaxWidth()) { Text("اهتزاز وإعدادات القناة") }
         Button(onClick = { MedAlarms.sendTest(context) }, modifier = Modifier.fillMaxWidth()) { Text("جرّب تنبيه دلوقتي") }
     }
 }
 
-private fun openAppNotificationSettings(context: Context) {
-    runCatching {
-        context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+private fun open(context: Context, intent: Intent) {
+    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 @Composable
@@ -277,10 +441,13 @@ private fun StatusLine(label: String, ok: Boolean) {
     Text((if (ok) "✅ " else "⚠️ ") + label + (if (ok) " — تمام" else " — محتاج تفعيل"), fontSize = 13.sp, color = if (ok) green else amber)
 }
 
+// ---------------------------------------------------------------- add / edit dialog
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit, onSave: (Medication) -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var dose by remember { mutableStateOf(initial?.dose ?: "1") }
     var unit by remember { mutableStateOf(initial?.unit?.ifBlank { null } ?: MED_UNITS.first()) }
@@ -289,48 +456,94 @@ private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: ()
     var start by remember { mutableStateOf(initial?.startDate ?: LocalDate.now()) }
     var end by remember { mutableStateOf(initial?.endDate) }
     var instruction by remember { mutableStateOf(initial?.instruction?.ifBlank { null } ?: MED_INSTRUCTIONS.first()) }
-    var remaining by remember { mutableStateOf(initial?.remaining?.let { formatNumber(it) } ?: "") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
+    var price by remember { mutableStateOf(initial?.price?.let { formatNumber(it) } ?: "") }
+    var strips by remember { mutableStateOf(initial?.stripsPerBox?.toString() ?: "") }
+    var perStrip by remember { mutableStateOf(initial?.unitsPerStrip?.toString() ?: "") }
+    var perBoxText by remember { mutableStateOf(if (initial?.stripsPerBox == null) initial?.unitsPerBox?.let { formatNumber(it) } ?: "" else "") }
+    val initialBoxes = remember {
+        val per = initial?.unitsPerBox
+        val left = initial?.remaining
+        if (per != null && per > 0 && left != null) formatNumber(Math.round(left / per * 100) / 100.0) else ""
+    }
+    var boxes by remember { mutableStateOf(initialBoxes) }
     var photo by remember { mutableStateOf(initial?.photo) }
     var newPhoto by remember { mutableStateOf<String?>(null) }
+    var pendingCamera by remember { mutableStateOf<File?>(null) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var reading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var timeEditIndex by remember { mutableStateOf<Int?>(null) }
     var datePicking by remember { mutableStateOf<String?>(null) }
 
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            vm.importMedPhoto({ context.contentResolver.openInputStream(uri) }) { saved ->
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val file = pendingCamera
+        pendingCamera = null
+        if (ok && file != null && file.exists()) {
+            vm.importMedPhoto({ file.inputStream() }) { saved ->
+                file.delete()
                 if (saved != null) {
                     newPhoto?.let { vm.deleteStrayFile(it) }
                     newPhoto = saved
                     photo = saved
+                    scope.launch {
+                        reading = true
+                        suggestions = recognizeDrugNames(vm.medPhotoFile(saved).absolutePath)
+                        reading = false
+                        if (suggestions.isEmpty()) vm.toast = "ما قدرتش أقرا اسم واضح، اكتبه بإيدك"
+                    }
                 }
             }
         }
     }
     fun dismiss() { newPhoto?.let { vm.deleteStrayFile(it) }; onDismiss() }
+    val isStrip = unit in STRIP_UNITS
 
     AlertDialog(
         onDismissRequest = { dismiss() },
         title = { Text(if (initial == null) "دواء جديد" else "تعديل الدواء") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("اسم الدواء") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                NumberField("الجرعة (الكمية في المرة)", dose, { dose = it })
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScrollCompat()) {
-                    MED_UNITS.forEach { u -> FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u) }) }
+                photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 120) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        runCatching {
+                            val file = File(context.cacheDir, "med_capture_${System.currentTimeMillis()}.jpg")
+                            pendingCamera = file
+                            camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
+                        }.onFailure { vm.toast = "تعذر فتح الكاميرا" }
+                    }) {
+                        Icon(Icons.Default.CameraAlt, null)
+                        Text("  ${if (photo == null) "صوّر العلبة" else "صوّر تاني"}")
+                    }
+                    if (photo != null) TextButton(onClick = { newPhoto?.let { vm.deleteStrayFile(it) }; newPhoto = null; photo = null; suggestions = emptyList() }) { Text("شيل الصورة") }
                 }
-                Text("مواعيد اليوم (${times.size} مرة)", fontWeight = FontWeight.SemiBold)
-                times.forEachIndexed { i, t ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { timeEditIndex = i }, modifier = Modifier.weight(1f)) { Text(t.hm()) }
-                        if (times.size > 1) IconButton(onClick = { times = times.filterIndexed { j, _ -> j != i } }) { Icon(Icons.Default.DeleteOutline, "حذف الموعد") }
+                if (reading) Hint("بقرا الاسم من الصورة...")
+                if (suggestions.isNotEmpty()) {
+                    Hint("الاسم اللي قريته من الصورة — اختار الصح:")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        suggestions.forEach { s -> FilterChip(selected = name == s, onClick = { name = s }, label = { Text(s) }) }
                     }
                 }
-                OutlinedButton(onClick = { times = times + LocalTime.of(20, 0); timeEditIndex = times.size - 1 }, modifier = Modifier.fillMaxWidth()) { Text("+ موعد تاني") }
+                OutlinedTextField(name, { name = it }, label = { Text("اسم الدواء") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                NumberField("الجرعة (الكمية في المرة)", dose, { dose = it })
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    MED_UNITS.forEach { u -> FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u) }) }
+                }
+
+                Text("عدد المرات في اليوم", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..4).forEach { n ->
+                        FilterChip(selected = times.size == n, onClick = { times = suggestTimes(n, times) }, label = { Text("$n") })
+                    }
+                }
+                times.forEachIndexed { i, t ->
+                    OutlinedButton(onClick = { timeEditIndex = i }, modifier = Modifier.fillMaxWidth()) { Text("المرة ${i + 1}:  ${t.format12()}") }
+                }
+
                 Text("الأيام", fontWeight = FontWeight.SemiBold)
                 FilterChip(selected = days.isEmpty(), onClick = { days = emptySet() }, label = { Text("كل يوم") })
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScrollCompat()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     weekOrder.forEach { d ->
                         FilterChip(selected = d in days, onClick = { days = if (d in days) days - d else days + d }, label = { Text(d.getDisplayName(TextStyle.SHORT, arabic)) })
                     }
@@ -341,40 +554,65 @@ private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: ()
                 }
                 if (end != null) TextButton(onClick = { end = null }) { Text("إلغاء تاريخ النهاية") }
                 Text("التعليمات", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScrollCompat()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     MED_INSTRUCTIONS.forEach { s -> FilterChip(selected = instruction == s, onClick = { instruction = s }, label = { Text(s) }) }
                 }
-                NumberField("الكمية المتبقية (اختياري)", remaining, { remaining = it })
-                OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات (اختياري)") }, modifier = Modifier.fillMaxWidth())
-                photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 110) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { pick.launch("image/*") }) { Text(if (photo == null) "إضافة صورة" else "تغيير الصورة") }
-                    if (photo != null) TextButton(onClick = { newPhoto?.let { vm.deleteStrayFile(it) }; newPhoto = null; photo = null }) { Text("شيل الصورة") }
+
+                Text("العلب والكمية", fontWeight = FontWeight.SemiBold)
+                if (isStrip) {
+                    NumberField("عدد الشرايط في العلبة", strips, { strips = it })
+                    NumberField("عدد ${unit}ات في الشريط", perStrip, { perStrip = it })
+                } else {
+                    NumberField("عدد ال$unit في العلبة/العبوة", perBoxText, { perBoxText = it })
                 }
+                NumberField("عدد العلب اللي معاك دلوقتي", boxes, { boxes = it })
+                NumberField("سعر العلبة (اختياري)", price, { price = it })
+                OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات (اختياري)") }, modifier = Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val amount = parseDecimal(dose)
-                val left = if (remaining.isBlank()) null else parseDecimal(remaining)
+                val stripsN = strips.trim().toIntOrNull()
+                val perStripN = perStrip.trim().toIntOrNull()
+                val perBox: Double? = if (isStrip) {
+                    if (stripsN != null && perStripN != null) (stripsN * perStripN).toDouble() else null
+                } else parseDecimal(perBoxText)
+                val boxesN = if (boxes.isBlank()) null else parseDecimal(boxes)
+                val priceN = if (price.isBlank()) null else parseDecimal(price)
                 val problem = when {
                     name.isBlank() -> "اكتب اسم الدواء"
                     amount == null || amount <= 0 -> "اكتب الجرعة (رقم أكبر من صفر)"
-                    times.map { it.hm() }.toSet().size != times.size -> "فيه موعدين متكررين"
                     end != null && end!!.isBefore(start) -> "تاريخ النهاية قبل البداية"
-                    remaining.isNotBlank() && left == null -> "الكمية المتبقية مش رقم صحيح"
+                    isStrip && (strips.isNotBlank() || perStrip.isNotBlank()) && perBox == null -> "اكتب عدد الشرايط وعدد ${unit}ات الشريط"
+                    boxes.isNotBlank() && boxesN == null -> "عدد العلب مش رقم صحيح"
+                    boxesN != null && (perBox == null || perBox <= 0) -> "اكتب حجم العلبة (شرايط × أقراص) علشان أحسب الكمية"
+                    price.isNotBlank() && priceN == null -> "السعر مش رقم صحيح"
                     else -> null
                 }
                 if (problem != null) { error = problem; return@TextButton }
+
+                var remaining = initial?.remaining
+                var full = initial?.fullQuantity
+                if (boxesN != null && perBox != null && boxes != initialBoxes) {
+                    val newRemaining = boxesN * perBox
+                    remaining = newRemaining
+                    full = if (full == null || newRemaining > full) newRemaining else full
+                }
                 newPhoto = null
                 onSave(
                     Medication(
                         id = initial?.id ?: UUID.randomUUID().toString(),
                         name = name.trim(), dose = formatNumber(amount!!), unit = unit,
                         times = times.sorted(), days = days, startDate = start, endDate = end,
-                        instruction = instruction, notes = notes.trim(), photo = photo, remaining = left,
-                        createdAt = initial?.createdAt ?: LocalDateTime.now()
+                        instruction = instruction, notes = notes.trim(), photo = photo, remaining = remaining,
+                        createdAt = initial?.createdAt ?: LocalDateTime.now(),
+                        stripsPerBox = if (isStrip) stripsN else null,
+                        unitsPerStrip = if (isStrip) perStripN else null,
+                        unitsPerBox = perBox,
+                        fullQuantity = full,
+                        price = priceN
                     )
                 )
             }) { Text("حفظ") }
@@ -384,7 +622,7 @@ private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: ()
 
     timeEditIndex?.let { index ->
         val current = times.getOrNull(index) ?: LocalTime.of(8, 0)
-        val state = rememberTimePickerState(initialHour = current.hour, initialMinute = current.minute, is24Hour = true)
+        val state = rememberTimePickerState(initialHour = current.hour, initialMinute = current.minute, is24Hour = false)
         AlertDialog(
             onDismissRequest = { timeEditIndex = null },
             confirmButton = {
@@ -415,6 +653,3 @@ private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: ()
         ) { DatePicker(state = state) }
     }
 }
-
-@Composable
-private fun Modifier.horizontalScrollCompat(): Modifier = this.then(Modifier.horizontalScroll(rememberScrollState()))

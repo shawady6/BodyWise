@@ -34,7 +34,12 @@ import com.shawady.bodywise.data.vitalWarning
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.Hint
+import com.shawady.bodywise.util.arabicDayFull
 import com.shawady.bodywise.util.bmi
+import com.shawady.bodywise.util.dayMonth
+import com.shawady.bodywise.util.format12
+import com.shawady.bodywise.ui.components.SectionTitle
+import com.shawady.bodywise.ui.components.SmallStat
 import com.shawady.bodywise.util.formatNumber
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -61,9 +66,23 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        val takenToday = slots.count { it.second == SlotState.TAKEN }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+            Text(
+                (if (now.hour < 12) "صباح الخير ☀️" else if (now.hour < 18) "مساء الخير 🌤" else "مساء الخير 🌙"),
+                fontSize = 24.sp, fontWeight = FontWeight.Bold
+            )
+            Hint("${arabicDayFull(today)} ${dayMonth(today)}")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmallStat("💧 المياه", "${vm.waterFor(today)}/${vm.waterGoal}", Modifier.weight(1f))
+                SmallStat("💊 الجرعات", if (slots.isEmpty()) "—" else "$takenToday/${slots.size}", Modifier.weight(1f))
+                SmallStat("🍽 الأكل", "${vm.mealsCount(today)}", Modifier.weight(1f))
+            }
+        }
+
         if (alerts.isNotEmpty()) {
             AppCard {
-                Text("تنبيهات مهمة", fontWeight = FontWeight.Bold)
+                SectionTitle("🔔", "تنبيهات مهمة")
                 alerts.forEach { a ->
                     Text((if (a.severe) "⚠️ " else "• ") + a.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (a.severe) red else amber)
                 }
@@ -71,13 +90,13 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         }
 
         AppCard {
-            Text("الأدوية القادمة", fontWeight = FontWeight.Bold)
+            SectionTitle("💊", "الأدوية القادمة")
             val pending = slots.filter { it.second != SlotState.TAKEN && it.second != SlotState.SKIPPED }
             if (vm.medications.isEmpty()) Hint("لسه ما أضفتش أدوية.")
             else if (pending.isEmpty()) Hint("خلّصت جرعات النهارده ✅")
             pending.take(4).forEach { (slot, state) ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(slot.time.toString().take(5), fontWeight = FontWeight.Bold)
+                    Text(slot.time.format12(), fontWeight = FontWeight.Bold)
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                         Text(slot.med.name, fontWeight = FontWeight.SemiBold)
                         Hint(listOf(slot.med.dose, slot.med.unit).filter { it.isNotBlank() }.joinToString(" ") + if (state == SlotState.MISSED) " • فاتت" else "")
@@ -89,7 +108,7 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         }
 
         AppCard {
-            Text("التغذية والمياه", fontWeight = FontWeight.Bold)
+            SectionTitle("🥗", "التغذية والمياه")
             Text("الأكل النهارده: ${vm.mealsCount(today)} صنف", fontSize = 14.sp)
             val cups = vm.waterFor(today)
             Text("المياه: $cups من ${vm.waterGoal} أكواب 💧", fontSize = 14.sp)
@@ -100,7 +119,7 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         }
 
         AppCard {
-            Text("الوزن", fontWeight = FontWeight.Bold)
+            SectionTitle("⚖️", "الوزن")
             if (lastWeight == null) Hint("لسه ما سجلتش وزن.") else {
                 val w = lastWeight.values.getValue(Metric.WEIGHT)
                 Text("${formatNumber(w)} كجم", fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -116,7 +135,7 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         }
 
         AppCard {
-            Text("آخر القياسات الحيوية", fontWeight = FontWeight.Bold)
+            SectionTitle("🩺", "آخر القياسات الحيوية")
             if (latestVitals.isEmpty()) Hint("لسه ما سجلتش قراءات.")
             latestVitals.forEach { r -> VitalLine(r) }
             OutlinedButton(onClick = { onNavigate(3) }, modifier = Modifier.fillMaxWidth()) { Text("حيوياتي") }
@@ -137,5 +156,5 @@ private fun VitalLine(r: VitalReading) {
             color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> red; else -> amber }
         )
     }
-    Hint("${r.at.toLocalDate()} ${r.at.toLocalTime().toString().take(5)}")
+    Hint("${r.at.toLocalDate()} ${r.at.toLocalTime().format12()}")
 }

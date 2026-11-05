@@ -49,6 +49,7 @@ import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.Hint
 import com.shawady.bodywise.ui.components.LineChart
 import com.shawady.bodywise.ui.components.NumberField
+import com.shawady.bodywise.util.format12
 import com.shawady.bodywise.util.formatNumber
 import com.shawady.bodywise.util.parseDecimal
 import java.time.Instant
@@ -56,10 +57,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 private fun VitalReading.display(): String = when (type) {
     VitalType.BP -> "${formatNumber(value)}/${formatNumber(value2 ?: 0.0)}"
@@ -94,7 +93,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
                     Text(latest.display(), fontSize = 34.sp, fontWeight = FontWeight.Bold)
                     Text(type.unit, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
                 }
-                Hint("${latest.at.toLocalDate()}  ${latest.at.format(timeFormat)}" + if (latest.tag.isNotBlank()) "  •  ${latest.tag}" else "")
+                Hint("${latest.at.toLocalDate()}  ${latest.at.toLocalTime().format12()}" + if (latest.tag.isNotBlank()) "  •  ${latest.tag}" else "")
                 vitalWarning(latest)?.let { w ->
                     Text(w.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (w.severe) Color(0xFFD32F2F) else Color(0xFFE08A00))
                 }
@@ -126,7 +125,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
                             fontWeight = FontWeight.SemiBold,
                             color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> Color(0xFFD32F2F); else -> Color(0xFFE08A00) }
                         )
-                        Hint("${r.at.toLocalDate()}  ${r.at.format(timeFormat)}" + (if (r.tag.isNotBlank()) "  •  ${r.tag}" else "") + (if (r.note.isNotBlank()) "  •  ${r.note}" else ""))
+                        Hint("${r.at.toLocalDate()}  ${r.at.toLocalTime().format12()}" + (if (r.tag.isNotBlank()) "  •  ${r.tag}" else "") + (if (r.note.isNotBlank()) "  •  ${r.note}" else ""))
                     }
                     IconButton(onClick = { editing = r }) { Icon(Icons.Default.Edit, "تعديل") }
                     IconButton(onClick = { vm.deleteVital(r) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
@@ -169,7 +168,7 @@ private fun VitalDialog(type: VitalType, initial: VitalReading?, onDismiss: () -
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showDate = true }, modifier = Modifier.weight(1f)) { Text(date.toString()) }
-                    OutlinedButton(onClick = { showTime = true }, modifier = Modifier.weight(1f)) { Text(time.format(timeFormat)) }
+                    OutlinedButton(onClick = { showTime = true }, modifier = Modifier.weight(1f)) { Text(time.format12()) }
                 }
                 when (type) {
                     VitalType.BP -> {
@@ -234,7 +233,7 @@ private fun VitalDialog(type: VitalType, initial: VitalReading?, onDismiss: () -
         ) { DatePicker(state = state) }
     }
     if (showTime) {
-        val state = rememberTimePickerState(initialHour = time.hour, initialMinute = time.minute, is24Hour = true)
+        val state = rememberTimePickerState(initialHour = time.hour, initialMinute = time.minute, is24Hour = false)
         AlertDialog(
             onDismissRequest = { showTime = false },
             confirmButton = { TextButton(onClick = { time = LocalTime.of(state.hour, state.minute); showTime = false }) { Text("تم") } },

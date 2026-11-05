@@ -26,7 +26,15 @@ data class Medication(
     val notes: String,
     val photo: String?,
     val remaining: Double?,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
+    /** Packaging: strips per box and units per strip (tablets/capsules), or units per box (injections, ml...). */
+    val stripsPerBox: Int? = null,
+    val unitsPerStrip: Int? = null,
+    val unitsPerBox: Double? = null,
+    /** Quantity (in units) at the last purchase or refill; "low" is measured against it. */
+    val fullQuantity: Double? = null,
+    /** Price of one box. */
+    val price: Double? = null
 )
 
 data class DoseLog(
@@ -87,4 +95,45 @@ fun nextOccurrence(med: Medication, time: LocalTime, from: LocalDateTime): Local
         day = day.plusDays(1)
     }
     return null
+}
+
+/** Tablets and capsules come in strips; everything else is counted directly per box. */
+val STRIP_UNITS = setOf("قرص", "كبسولة")
+
+const val REFILL_FRACTION = 0.10
+
+/** Less than 10% of the last stocked quantity is left. Without a stocked quantity, fewer than 3 days of doses remain. */
+fun Medication.needsRefill(): Boolean {
+    val left = remaining ?: return false
+    val full = fullQuantity
+    return if (full != null && full > 0) left < full * REFILL_FRACTION
+    else left <= doseAmount() * times.size.coerceAtLeast(1) * 3
+}
+
+fun Medication.percentLeft(): Int? {
+    val left = remaining ?: return null
+    val full = fullQuantity?.takeIf { it > 0 } ?: return null
+    return Math.round(left / full * 100).toInt().coerceIn(0, 100)
+}
+
+/** Adds [boxes] new boxes to the stock and makes the new total the reference for the 10% rule. */
+fun Medication.refilled(boxes: Double, newPrice: Double?): Medication {
+    val perBox = unitsPerBox ?: return this
+    val total = (remaining ?: 0.0) + boxes * perBox
+    return copy(remaining = total, fullQuantity = total, price = newPrice ?: price)
+}
+
+/** Evenly spread default times; keeps times the user already set when the count changes. */
+fun suggestTimes(count: Int, existing: List<LocalTime>): List<LocalTime> {
+    val defaults = when (count) {
+        1 -> listOf(8, 0)
+        2 -> listOf(8, 20)
+        3 -> listOf(8, 14, 20)
+        else -> listOf(8, 12, 16, 20)
+    }.filter { it != 0 }.map { LocalTime.of(it, 0) }
+    val result = existing.take(count).toMutableList()
+    for (t in defaults) { if (result.size >= count) break; if (t !in result) result.add(t) }
+    var hour = 9
+    while (result.size < count) { val t = LocalTime.of(hour++ % 24, 0); if (t !in result) result.add(t) }
+    return result.sorted()
 }

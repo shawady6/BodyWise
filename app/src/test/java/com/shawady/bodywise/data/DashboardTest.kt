@@ -18,7 +18,7 @@ class DashboardTest {
         val alerts = dashboardAlerts(now, listOf(slot to SlotState.MISSED), listOf(med), listOf(bp), 3, 8, LocalDate.of(2026, 10, 20))
         assertTrue(alerts.first().severe)
         assertTrue(alerts.any { it.text.contains("فاتتك") })
-        assertTrue(alerts.any { it.text.contains("قرب يخلص") })
+        assertTrue(alerts.any { it.text.contains("تجديد") })
         assertTrue(alerts.any { it.text.contains("مية") })
         assertTrue(alerts.any { it.text.contains("آخر قياس") })
     }

@@ -70,5 +70,7 @@ data class AppSettings(
     val weeklyReminder: Boolean = false,
     val autoBackupUri: String? = null,
     val lastAutoBackup: String? = null,
-    val onboarded: Boolean = false
+    val onboarded: Boolean = false,
+    /** Ringtone for medication alarms (content URI string); null = system alarm sound. */
+    val medTone: String? = null
 )
