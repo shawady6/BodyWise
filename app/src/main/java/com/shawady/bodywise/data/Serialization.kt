@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 3
+    const val VERSION = 4
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -110,6 +110,30 @@ object SnapshotJson {
         return result
     }
 
+    fun vitalsToJson(list: List<VitalReading>): JSONArray {
+        val array = JSONArray()
+        list.forEach { v ->
+            val item = JSONObject().put("id", v.id).put("type", v.type.key).put("at", v.at.toString())
+                .put("value", formatNumber(v.value)).put("tag", v.tag).put("note", v.note)
+            v.value2?.let { item.put("value2", formatNumber(it)) }
+            array.put(item)
+        }
+        return array
+    }
+
+    fun vitalsFromJson(array: JSONArray): List<VitalReading> = List(array.length()) { i ->
+        val item = array.getJSONObject(i)
+        VitalReading(
+            id = item.optString("id").ifBlank { UUID.randomUUID().toString() },
+            type = VitalType.entries.first { it.key == item.getString("type") },
+            at = java.time.LocalDateTime.parse(item.getString("at")),
+            value = parseDecimal(item.getString("value")) ?: error("قيمة غير صالحة"),
+            value2 = parseDecimal(item.optString("value2")),
+            tag = item.optString("tag"),
+            note = item.optString("note")
+        )
+    }
+
     fun toBackup(snapshot: Snapshot, exportedAt: LocalDate): JSONObject = JSONObject()
         .put("format", FORMAT)
         .put("version", VERSION)
@@ -119,6 +143,7 @@ object SnapshotJson {
         .put("measurements", measurementsToJson(snapshot.measurements))
         .put("photos", photosToJson(snapshot.photos))
         .put("notes", notesToJson(snapshot.notes))
+        .put("vitals", vitalsToJson(snapshot.vitals))
         .put("settings", JSONObject()
             .put("waterGoal", snapshot.waterGoal)
             .put("heightCm", snapshot.heightCm?.let { formatNumber(it) } ?: "")
@@ -135,7 +160,8 @@ object SnapshotJson {
             waterGoal = (json.optJSONObject("settings")?.optInt("waterGoal", 8) ?: 8).coerceIn(1, 30),
             notes = json.optJSONObject("notes")?.let { notesFromJson(it) } ?: emptyMap(),
             heightCm = parseDecimal(json.optJSONObject("settings")?.optString("heightCm").orEmpty()),
-            targetWeight = parseDecimal(json.optJSONObject("settings")?.optString("targetWeight").orEmpty())
+            targetWeight = parseDecimal(json.optJSONObject("settings")?.optString("targetWeight").orEmpty()),
+            vitals = json.optJSONArray("vitals")?.let { vitalsFromJson(it) } ?: emptyList()
         )
     }
 }

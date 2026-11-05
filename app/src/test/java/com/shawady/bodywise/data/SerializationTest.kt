@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class SerializationTest {
     private val sample = Snapshot(
@@ -20,7 +21,11 @@ class SerializationTest {
         waterGoal = 10,
         notes = mapOf("2026-11-05" to DayNote(7.5, 4, 30, "نمت كويس")),
         heightCm = 175.0,
-        targetWeight = 78.0
+        targetWeight = 78.0,
+        vitals = listOf(
+            VitalReading("v1", VitalType.BP, LocalDateTime.of(2026, 11, 5, 8, 30), 120.0, 80.0, "", "الصبح"),
+            VitalReading("v2", VitalType.SUGAR, LocalDateTime.of(2026, 11, 5, 9, 0), 95.0, null, "صائم", "")
+        )
     )
 
     @Test
@@ -45,6 +50,13 @@ class SerializationTest {
         assertEquals(100.5, restored.measurements[0].values[Metric.WAIST]!!, 0.0)
         assertTrue(restored.measurements[0].id.isNotBlank())
         assertEquals("progress_9.jpg", restored.photos[0].file)
+    }
+
+    @Test
+    fun oldBackupsWithoutVitalsStillLoad() {
+        val v3 = SnapshotJson.toBackup(sample, LocalDate.of(2026, 11, 9)).put("version", 3)
+        v3.remove("vitals")
+        assertTrue(SnapshotJson.fromBackup(v3).vitals.isEmpty())
     }
 
     @Test

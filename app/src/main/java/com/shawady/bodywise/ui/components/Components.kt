@@ -117,7 +117,8 @@ fun PhotoThumb(file: File, modifier: Modifier = Modifier, height: Int = 190) {
 
 /** Simple line chart; time runs left to right regardless of the app's RTL layout. */
 @Composable
-fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Modifier = Modifier, target: Double? = null) {
+fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Modifier = Modifier, target: Double? = null,
+    secondary: List<Pair<LocalDate, Double>>? = null) {
     if (points.size < 2) {
         Hint("سجّل قياسين على الأقل لعرض الرسم البياني.", modifier)
         return
@@ -125,7 +126,7 @@ fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Mod
     val primary = MaterialTheme.colorScheme.primary
     val grid = MaterialTheme.colorScheme.outlineVariant
     val targetColor = Color(0xFFE0A030)
-    val values = points.map { it.second } + listOfNotNull(target)
+    val values = points.map { it.second } + (secondary?.map { it.second } ?: emptyList()) + listOfNotNull(target)
     val minValue = values.min()
     val maxValue = values.max()
     val pad = (if (maxValue - minValue > 0.0) maxValue - minValue else 1.0) * 0.15
@@ -159,6 +160,13 @@ fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Mod
                     if (index == 0) path.moveTo(px(date), py(value)) else path.lineTo(px(date), py(value))
                 }
                 drawPath(path, primary, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                if (secondary != null && secondary.size >= 2) {
+                    val path2 = Path()
+                    secondary.forEachIndexed { index, (date, value) ->
+                        if (index == 0) path2.moveTo(px(date), py(value)) else path2.lineTo(px(date), py(value))
+                    }
+                    drawPath(path2, targetColor, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                }
                 points.forEach { (date, value) -> drawCircle(primary, radius = 4.dp.toPx(), center = Offset(px(date), py(value))) }
             }
             if (target != null) Hint("الخط المتقطع: الهدف ${formatNumber(target)} $unit")

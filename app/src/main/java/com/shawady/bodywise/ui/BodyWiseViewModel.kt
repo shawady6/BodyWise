@@ -44,6 +44,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     val notes = mutableStateMapOf<String, DayNote>()
     val measurements = mutableStateListOf<Measurement>()
     val photos = mutableStateListOf<ProgressPhoto>()
+    val vitals = mutableStateListOf<com.shawady.bodywise.data.VitalReading>()
     var waterGoal by mutableIntStateOf(8)
         private set
     var heightCm by mutableStateOf<Double?>(null)
@@ -74,6 +75,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         notes.clear(); notes.putAll(snapshot.notes)
         measurements.clear(); measurements.addAll(snapshot.measurements.sortedByDescending { it.date })
         photos.clear(); photos.addAll(snapshot.photos.sortedByDescending { it.date })
+        vitals.clear(); vitals.addAll(snapshot.vitals.sortedByDescending { it.at })
         waterGoal = snapshot.waterGoal
         heightCm = snapshot.heightCm
         targetWeight = snapshot.targetWeight
@@ -81,7 +83,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun snapshot() = Snapshot(
         meals.toMap(), water.toMap(), measurements.toList(), photos.toList(), waterGoal,
-        notes.toMap(), heightCm, targetWeight
+        notes.toMap(), heightCm, targetWeight, vitals.toList()
     )
 
     private fun persist() = store.save(snapshot())
@@ -204,6 +206,21 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         measurements.removeAll { it.id == measurement.id }
         persist()
         offerUndo(UndoRequest("اتحذف قياس ${measurement.date}", undo = { saveMeasurement(measurement) }))
+    }
+
+    // ---- Vitals ----
+    fun saveVital(reading: com.shawady.bodywise.data.VitalReading) {
+        val index = vitals.indexOfFirst { it.id == reading.id }
+        if (index >= 0) vitals[index] = reading else vitals.add(reading)
+        val sorted = vitals.sortedByDescending { it.at }
+        vitals.clear(); vitals.addAll(sorted)
+        persist()
+    }
+
+    fun deleteVital(reading: com.shawady.bodywise.data.VitalReading) {
+        vitals.removeAll { it.id == reading.id }
+        persist()
+        offerUndo(UndoRequest("اتحذفت قراءة ${reading.type.label}", undo = { saveVital(reading) }))
     }
 
     fun exportCsv(uri: Uri) {

@@ -21,7 +21,8 @@ class BodyWiseStore(private val context: Context) {
         waterGoal = prefs.getInt("water_goal", 8).coerceIn(1, 30),
         notes = runCatching { SnapshotJson.notesFromJson(JSONObject(prefs.getString("notes", "{}") ?: "{}")) }.getOrDefault(emptyMap()),
         heightCm = prefs.getString("height_cm", null)?.let { parseDecimal(it) },
-        targetWeight = prefs.getString("target_weight", null)?.let { parseDecimal(it) }
+        targetWeight = prefs.getString("target_weight", null)?.let { parseDecimal(it) },
+        vitals = runCatching { SnapshotJson.vitalsFromJson(JSONArray(prefs.getString("vitals", "[]") ?: "[]")) }.getOrDefault(emptyList())
     )
 
     fun save(snapshot: Snapshot) {
@@ -34,6 +35,7 @@ class BodyWiseStore(private val context: Context) {
             .putString("notes", SnapshotJson.notesToJson(snapshot.notes).toString())
             .putString("height_cm", snapshot.heightCm?.let { formatNumber(it) })
             .putString("target_weight", snapshot.targetWeight?.let { formatNumber(it) })
+            .putString("vitals", SnapshotJson.vitalsToJson(snapshot.vitals).toString())
             .apply()
     }
 }
