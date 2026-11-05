@@ -72,7 +72,7 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess { file ->
                     readyFile = file
                     progress = 1f
-                    message = "اكتمل التنزيل وتم التحقق من سلامة الملف. اضغط تثبيت التحديث."
+                    message = "اكتمل التنزيل. اضغط تثبيت التحديث."
                 }
                 .onFailure { message = "فشل تنزيل التحديث: ${it.message ?: "خطأ غير معروف"}" }
             downloading = false

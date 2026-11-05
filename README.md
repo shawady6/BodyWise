@@ -30,7 +30,7 @@ gradle testDebugUnitTest assembleDebug
 APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## الإصدارات والتحديث
-راجع [docs/RELEASING.md](docs/RELEASING.md). التحديث من داخل التطبيق ينزّل APK من آخر Release، يتحقق من SHA-256 وتوقيع الشهادة، ثم يفتح مثبت Android لموافقتك. لا يتم تثبيت أي شيء بصمت.
+راجع [docs/RELEASING.md](docs/RELEASING.md). التحديث من داخل التطبيق ينزّل APK من آخر Release، يتأكد إنه نزل كامل ومن نفس توقيع التطبيق، ثم يفتح مثبت Android لموافقتك. لا يتم تثبيت أي شيء بصمت.
 
 ## الخصوصية
 لا AI ولا حسابات ولا تحليلات ولا مزامنة سحابية. البيانات والصور على الجهاز فقط. الإنترنت لفحص وتنزيل تحديثات GitHub فقط. النسخ التلقائي يكتب في مجلد تختاره أنت على جهازك.

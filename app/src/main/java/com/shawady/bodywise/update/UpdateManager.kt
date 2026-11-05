@@ -8,9 +8,8 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 
-data class ReleaseInfo(val tag: String, val apkUrl: String, val sha256: String?, val size: Long)
+data class ReleaseInfo(val tag: String, val apkUrl: String, val size: Long)
 
 object UpdateManager {
     private const val LATEST = "https://api.github.com/repos/shawady6/BodyWise/releases/latest"
@@ -38,28 +37,18 @@ object UpdateManager {
         val release = JSONObject(readText(LATEST))
         val assets = release.optJSONArray("assets") ?: JSONArray()
         var apk: JSONObject? = null
-        var shaAsset: JSONObject? = null
         for (i in 0 until assets.length()) {
             val asset = assets.getJSONObject(i)
             val name = asset.optString("name")
             if (name.endsWith(".apk") && apk == null) apk = asset
-            if (name.endsWith(".apk.sha256") && shaAsset == null) shaAsset = asset
         }
         val selected = apk ?: error("ملف APK غير موجود في أحدث إصدار")
-        var sha = selected.optString("digest").removePrefix("sha256:").lowercase().takeIf { it.length == 64 }
-        if (sha == null && shaAsset != null) {
-            sha = runCatching {
-                readText(shaAsset.getString("browser_download_url")).trim().substringBefore(' ').lowercase()
-            }.getOrNull()?.takeIf { it.length == 64 }
-        }
-        return ReleaseInfo(release.optString("tag_name"), selected.getString("browser_download_url"), sha, selected.optLong("size"))
+        return ReleaseInfo(release.optString("tag_name"), selected.getString("browser_download_url"), selected.optLong("size"))
     }
 
-    /** Blocking. Downloads, then verifies size and SHA-256; deletes the file when verification fails. */
+    /** Blocking. Downloads the APK and checks it arrived complete. Android verifies the signature on install. */
     fun download(context: Context, info: ReleaseInfo, onProgress: (Float) -> Unit): File {
-        val expected = info.sha256 ?: error("لا تتوفر بصمة SHA-256 لهذا الإصدار، أوقفنا التثبيت للأمان")
         val target = File(context.cacheDir, "bodywise-update.apk")
-        val digest = MessageDigest.getInstance("SHA-256")
         val connection = open(info.apkUrl)
         try {
             val total = connection.contentLengthLong.takeIf { it > 0 } ?: info.size
@@ -70,7 +59,6 @@ object UpdateManager {
                     while (true) {
                         val read = input.read(buffer)
                         if (read < 0) break
-                        digest.update(buffer, 0, read)
                         output.write(buffer, 0, read)
                         count += read
                         if (total > 0) onProgress((count.toFloat() / total).coerceIn(0f, 1f))
@@ -80,9 +68,10 @@ object UpdateManager {
         } finally {
             connection.disconnect()
         }
-        if (target.length() < 1_000_000L) { target.delete(); error("حجم ملف APK غير متوقع") }
-        val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        if (actual != expected) { target.delete(); error("فشل التحقق من سلامة الملف (SHA-256)") }
+        if (target.length() < 1_000_000L || (info.size > 0 && target.length() != info.size)) {
+            target.delete()
+            error("الملف ناقص أو تالف، جرّب التنزيل تاني")
+        }
         return target
     }
 

@@ -187,7 +187,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                         enabled = !updateVm.downloading, modifier = Modifier.fillMaxWidth()
                     ) { Text(if (updateVm.readyFile != null) "تثبيت التحديث" else "تنزيل التحديث") }
                 }
-                Hint("يتم فحص SHA-256 قبل التثبيت. التثبيت يحتاج موافقتك، وبياناتك لا تُحذف بالتحديث المتوافق.")
+                Hint("التثبيت يحتاج موافقتك، وأندرويد بيتأكد إن التحديث موقّع بنفس مفتاح التطبيق. بياناتك لا تُحذف بالتحديث المتوافق.")
             }
         }
     }
