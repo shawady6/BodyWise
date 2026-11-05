@@ -1,4 +1,4 @@
-package com.shawady.bodywise
+package com.shawady.bodywise.update
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -7,8 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import androidx.core.content.IntentCompat
-import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.io.File
 
 private const val INSTALL_ACTION = "com.shawady.bodywise.INSTALL_RESULT"
 

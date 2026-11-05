@@ -1,0 +1,161 @@
+package com.shawady.bodywise.ui.components
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.shawady.bodywise.util.decodeThumbnail
+import com.shawady.bodywise.util.formatNumber
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.LocalDate
+
+@Composable
+fun AppCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}
+
+@Composable
+fun SmallStat(title: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(Modifier.padding(13.dp)) {
+            Text(title, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 19.sp)
+        }
+    }
+}
+
+@Composable
+fun Hint(text: String, modifier: Modifier = Modifier) {
+    Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
+}
+
+@Composable
+fun NumberField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+fun ConfirmDialog(title: String, text: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+@Composable
+fun PhotoThumb(file: File, modifier: Modifier = Modifier, height: Int = 190) {
+    val bitmap by produceState<ImageBitmap?>(null, file.absolutePath) {
+        value = withContext(Dispatchers.IO) { decodeThumbnail(file.absolutePath)?.asImageBitmap() }
+    }
+    val image = bitmap
+    if (image != null) {
+        Image(image, null, modifier = modifier.fillMaxWidth().height(height.dp), contentScale = ContentScale.Fit)
+    } else {
+        Box(modifier.fillMaxWidth().height(height.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+    }
+}
+
+/** Simple line chart; time runs left to right regardless of the app's RTL layout. */
+@Composable
+fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Modifier = Modifier) {
+    if (points.size < 2) {
+        Hint("سجّل قياسين على الأقل لعرض الرسم البياني.", modifier)
+        return
+    }
+    val primary = MaterialTheme.colorScheme.primary
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val values = points.map { it.second }
+    val minValue = values.min()
+    val maxValue = values.max()
+    val pad = (if (maxValue - minValue > 0.0) maxValue - minValue else 1.0) * 0.15
+    val low = minValue - pad
+    val high = maxValue + pad
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Column(modifier) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Hint("${formatNumber(minValue)} $unit")
+                Hint("${formatNumber(maxValue)} $unit")
+            }
+            Canvas(Modifier.fillMaxWidth().height(160.dp).padding(vertical = 8.dp)) {
+                val w = size.width
+                val h = size.height
+                for (i in 0..2) {
+                    val y = h * i / 2f
+                    drawLine(grid, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+                }
+                val firstDay = points.first().first.toEpochDay()
+                val span = (points.last().first.toEpochDay() - firstDay).coerceAtLeast(1L).toFloat()
+                fun px(date: LocalDate): Float = w * (date.toEpochDay() - firstDay) / span
+                fun py(value: Double): Float = h - (h * ((value - low) / (high - low))).toFloat()
+                val path = Path()
+                points.forEachIndexed { index, (date, value) ->
+                    if (index == 0) path.moveTo(px(date), py(value)) else path.lineTo(px(date), py(value))
+                }
+                drawPath(path, primary, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                points.forEach { (date, value) -> drawCircle(primary, radius = 4.dp.toPx(), center = Offset(px(date), py(value))) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Hint(points.first().first.toString())
+                Hint(points.last().first.toString())
+            }
+        }
+    }
+}
