@@ -25,7 +25,10 @@ fun rankNameCandidates(lines: List<Pair<String, Int>>, limit: Int = 4): List<Str
             val visible = text.count { !it.isWhitespace() }
             text.length in 3..28 && visible > 0 && letters.toDouble() / visible >= 0.7
         }
-        .filter { (text, _) -> text.lowercase().trim('.', ',', ':', '®', '™') !in noiseWords }
+        .filter { (text, _) ->
+            val words = text.lowercase().split(" ").map { it.trim('.', ',', ':', '®', '™') }
+            words.count { it in noiseWords } * 2 <= words.size
+        }
         .sortedByDescending { it.second }
         .map { (text, _) -> prettify(text) }
         .distinct()
