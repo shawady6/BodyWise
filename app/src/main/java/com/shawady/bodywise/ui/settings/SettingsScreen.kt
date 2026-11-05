@@ -118,8 +118,8 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                         Text("هدف المياه اليومي")
                         Hint("${vm.waterGoal} أكواب")
                     }
-                    IconButton(onClick = { vm.setWaterGoal(vm.waterGoal - 1) }) { Icon(Icons.Default.Remove, "نقص") }
-                    IconButton(onClick = { vm.setWaterGoal(vm.waterGoal + 1) }) { Icon(Icons.Default.Add, "زيادة") }
+                    IconButton(onClick = { vm.changeWaterGoal(vm.waterGoal - 1) }) { Icon(Icons.Default.Remove, "نقص") }
+                    IconButton(onClick = { vm.changeWaterGoal(vm.waterGoal + 1) }) { Icon(Icons.Default.Add, "زيادة") }
                 }
             }
         }

@@ -109,7 +109,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
-    fun setWaterGoal(goal: Int) {
+    fun changeWaterGoal(goal: Int) {
         waterGoal = goal.coerceIn(1, 30)
         persist()
     }
