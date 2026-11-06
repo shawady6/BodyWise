@@ -359,7 +359,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun restoreBackup(uri: Uri) {
+    fun restoreBackup(uri: Uri, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             busy = true
             backupMessage = "جاري فحص واستعادة النسخة الاحتياطية..."
@@ -381,6 +381,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
                 oldFiles.forEach { File(store.photosDir, it).delete() }
                 WaterWidgetProvider.refresh(context)
                 backupMessage = "تمت استعادة البيانات و${restored.photos.size} صورة بنجاح."
+                onDone()
             }.onFailure {
                 backupMessage = "تعذرت الاستعادة ولم يتم تغيير بياناتك: ${it.message ?: "ملف غير صالح"}"
             }

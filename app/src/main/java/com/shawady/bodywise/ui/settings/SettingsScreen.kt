@@ -16,6 +16,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.shawady.bodywise.ui.components.SectionTitle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Backup
@@ -57,7 +65,7 @@ import com.shawady.bodywise.update.UpdateViewModel
 import java.time.LocalDate
 
 @Composable
-fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailable: Boolean) {
+fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailable: Boolean, section: String? = null) {
     val context = LocalContext.current
     val settings = vm.settings
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
@@ -86,14 +94,23 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
     var heightText by remember { mutableStateOf(vm.heightCm?.let { formatNumber(it) } ?: "") }
     var targetText by remember { mutableStateOf(vm.targetWeight?.let { formatNumber(it) } ?: "") }
 
+    var openId by rememberSaveable { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    LaunchedEffect(section) {
+        val id = section?.substringBefore('#')?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        openId = id
+        val index = listOf("look", "data", "reminders", "alerts", "security", "backup", "update").indexOf(id)
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
         item {
-            AppCard {
-                Text("المظهر والهدف", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("look", "🎨", "المظهر والهدف", openId, { openId = it }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("تلقائي", "فاتح", "داكن").forEachIndexed { index, label ->
                         FilterChip(selected = settings.themeMode == index, onClick = { vm.setThemeMode(index) }, label = { Text(label) })
@@ -110,8 +127,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             }
         }
         item {
-            AppCard {
-                Text("بياناتي", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("data", "👤", "بياناتي", openId, { openId = it }) {
                 NumberField("الطول (سم)", heightText, { heightText = it })
                 NumberField("الوزن المستهدف (كجم)", targetText, { targetText = it })
                 Hint("الطول بيُستخدم لحساب BMI تقريبي، والهدف بيظهر كخط على الرسم البياني.")
@@ -127,15 +143,18 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             }
         }
         item {
-            AppCard {
-                Text("التذكيرات", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("reminders", "⏰", "التذكيرات", openId, { openId = it }) {
                 SwitchRow("تذكير المياه", "كل 3 ساعات من 9 صباحًا لـ 9 مساءً، لو لسه ما وصلتش للهدف", settings.waterReminders) { toggleReminder("water", it) }
                 SwitchRow("تذكير قياسات الأسبوع", "الجمعة 6 مساءً لو ما سجلتش قياسات الأسبوع ده", settings.weeklyReminder) { toggleReminder("weekly", it) }
             }
         }
         item {
-            AppCard {
-                Text("الأمان", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("alerts", "💊", "تنبيهات الأدوية", openId, { openId = it }) {
+                AlertsPanel(vm)
+            }
+        }
+        item {
+            SettingsSection("security", "🔒", "الأمان", openId, { openId = it }) {
                 SwitchRow(
                     "قفل التطبيق بالبصمة", "يتطلب التحقق عند فتح التطبيق من جديد", settings.appLock
                 ) { enabled ->
@@ -146,8 +165,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             }
         }
         item {
-            AppCard {
-                Text("النسخ الاحتياطي والاستعادة", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("backup", "💾", "النسخ الاحتياطي والاستعادة", openId, { openId = it }) {
                 Hint("احفظ الوجبات والمياه والقياسات وصور التقدم في ملف واحد، واستعدها عند تغيير الهاتف.")
                 Button(onClick = { export.launch("BodyWise-Backup-${LocalDate.now()}.zip") }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Backup, null); Spacer(Modifier.width(8.dp)); Text("إنشاء نسخة احتياطية كاملة")
@@ -175,8 +193,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             }
         }
         item {
-            AppCard {
-                Text("تحديث التطبيق", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            SettingsSection("update", "⬇️", "تحديث التطبيق", openId, { openId = it }) {
                 Hint("الإصدار المثبت: ${BuildConfig.VERSION_NAME}")
                 Hint(updateVm.message)
                 Button(onClick = { updateVm.check() }, enabled = !updateVm.checking && !updateVm.downloading, modifier = Modifier.fillMaxWidth()) {
@@ -206,5 +223,18 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             onConfirm = { pendingRestore = null; vm.restoreBackup(uri) },
             onDismiss = { pendingRestore = null }
         )
+    }
+}
+
+/** Tap the title to open or close the section; only one is open at a time. */
+@Composable
+private fun SettingsSection(id: String, emoji: String, title: String, openId: String, onOpen: (String) -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val expanded = openId == id
+    AppCard {
+        Row(Modifier.fillMaxWidth().clickable { onOpen(if (expanded) "" else id) }, verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle(emoji, title, Modifier.weight(1f))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (expanded) "إغلاق" else "فتح")
+        }
+        if (expanded) content()
     }
 }

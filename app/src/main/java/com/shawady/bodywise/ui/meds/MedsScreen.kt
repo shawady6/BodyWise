@@ -132,7 +132,7 @@ private fun Medication.packagingText(): String? = when {
 }
 
 @Composable
-fun MedsScreen(vm: BodyWiseViewModel) {
+fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
     val now by produceState(LocalDateTime.now()) {
         while (true) { delay(30_000); value = LocalDateTime.now() }
     }
@@ -157,7 +157,7 @@ fun MedsScreen(vm: BodyWiseViewModel) {
         ) {
             when (sub) {
                 0 -> DosesTab(vm, now)
-                1 -> MedsTab(vm, onAdd = { adding = true }, onEdit = { editing = it })
+                1 -> MedsTab(vm, onAdd = { adding = true }, onEdit = { editing = it }, onOpenSettings = onOpenSettings)
                 else -> RefillTab(vm, refillList) { refilling = it }
             }
             Hint("التطبيق بينظّم مواعيد الدواء بس، ومش بيغني عن تعليمات الدكتور أو الصيدلي.")
@@ -249,7 +249,7 @@ private fun HistoryCard(vm: BodyWiseViewModel, now: LocalDateTime) {
 // ---------------------------------------------------------------- medications
 
 @Composable
-private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medication) -> Unit) {
+private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medication) -> Unit, onOpenSettings: () -> Unit) {
     Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Default.Add, null)
         Text("  إضافة دواء")
@@ -280,7 +280,7 @@ private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medicatio
             med.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 110) }
         }
     }
-    AlertsCard(vm)
+    OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("⚙️ إعدادات التنبيهات والنغمة") }
 }
 
 // ---------------------------------------------------------------- refill
@@ -348,97 +348,6 @@ private fun RefillDialog(med: Medication, onDismiss: () -> Unit, onSave: (Medica
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
-}
-
-// ---------------------------------------------------------------- alerts settings
-
-@Composable
-private fun AlertsCard(vm: BodyWiseViewModel) {
-    val context = LocalContext.current
-    var refresh by remember { mutableIntStateOf(0) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
-    }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
-    val tonePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            @Suppress("DEPRECATION")
-            val picked = result.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
-            vm.setMedTone(picked?.toString())
-        }
-    }
-    @Suppress("UNUSED_EXPRESSION") refresh
-    val manager = context.getSystemService(NotificationManager::class.java)
-    val notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
-    val batteryOk = context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
-    val exactOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    val fullScreenOk = Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent()
-    val overlayOk = Settings.canDrawOverlays(context)
-    val toneUri = vm.settings.medTone?.let { Uri.parse(it) }
-    val toneTitle = remember(vm.settings.medTone) {
-        runCatching { toneUri?.let { RingtoneManager.getRingtone(context, it)?.getTitle(context) } }.getOrNull() ?: "نغمة المنبه الافتراضية"
-    }
-
-    AppCard {
-        SectionTitle("🔔", "إعدادات التنبيهات")
-        StatusLine("الإشعارات", notificationsOn)
-        StatusLine("المواعيد الدقيقة", exactOk)
-        StatusLine("الشاشة الكاملة وقت القفل", fullScreenOk)
-        StatusLine("الشاشة الكاملة والموبايل مفتوح", overlayOk)
-        StatusLine("استثناء من توفير البطارية", batteryOk)
-        if (!notificationsOn) {
-            Button(onClick = {
-                if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS) else open(context, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
-            }, modifier = Modifier.fillMaxWidth()) { Text("تفعيل الإشعارات") }
-        }
-        if (!exactOk) OutlinedButton(onClick = {
-            open(context, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
-        }, modifier = Modifier.fillMaxWidth()) { Text("السماح بالمواعيد الدقيقة") }
-        if (!fullScreenOk) OutlinedButton(onClick = {
-            open(context, Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", Uri.parse("package:${context.packageName}")))
-        }, modifier = Modifier.fillMaxWidth()) { Text("السماح بالشاشة الكاملة") }
-        if (!overlayOk) {
-            OutlinedButton(onClick = {
-                open(context, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
-            }, modifier = Modifier.fillMaxWidth()) { Text("الظهور فوق التطبيقات (شاشة كاملة والموبايل مفتوح)") }
-            Hint("من غيرها، لو الموبايل مفتوح بيظهر إشعار كبير فوق بدل الشاشة الكاملة.")
-        }
-        if (!batteryOk) {
-            OutlinedButton(onClick = {
-                open(context, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }, modifier = Modifier.fillMaxWidth()) { Text("استثناء BodyWise من توفير البطارية") }
-            Hint("في بعض الموبايلات (شاومي، سامسونج، أوبو...) لازم ده علشان التنبيه يشتغل والتطبيق مقفول.")
-        }
-        OutlinedButton(onClick = {
-            tonePicker.launch(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_RINGTONE)
-                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "نغمة تنبيه الدواء")
-                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, toneUri)
-            })
-        }, modifier = Modifier.fillMaxWidth()) { Text("🎵 نغمة التنبيه: $toneTitle") }
-        Hint("لو عايز نغمتك الخاصة، حطها في فولدر Alarms أو Ringtones في الموبايل وهتظهر في القائمة.")
-        OutlinedButton(onClick = {
-            open(context, Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                putExtra(Settings.EXTRA_CHANNEL_ID, MedAlarms.channelId(context))
-            })
-        }, modifier = Modifier.fillMaxWidth()) { Text("اهتزاز وإعدادات القناة") }
-        Button(onClick = { MedAlarms.sendTest(context) }, modifier = Modifier.fillMaxWidth()) { Text("جرّب تنبيه دلوقتي") }
-    }
-}
-
-private fun open(context: Context, intent: Intent) {
-    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-}
-
-@Composable
-private fun StatusLine(label: String, ok: Boolean) {
-    Text((if (ok) "✅ " else "⚠️ ") + label + (if (ok) " — تمام" else " — محتاج تفعيل"), fontSize = 13.sp, color = if (ok) green else amber)
 }
 
 // ---------------------------------------------------------------- add / edit dialog

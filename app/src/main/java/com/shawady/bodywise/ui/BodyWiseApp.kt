@@ -152,6 +152,8 @@ private fun LockScreen(message: String, onUnlock: () -> Unit) {
 @Composable
 private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLock: AppLock) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
+    var requests by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm.toast) {
         vm.toast?.let {
@@ -187,7 +189,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                     )
                 }
                 Text(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                IconButton(onClick = { tab = if (tab == 5) 0 else 5 }) {
+                IconButton(onClick = { settingsSection = null; tab = if (tab == 5) 0 else 5 }) {
                     Icon(Icons.Default.Settings, "الإعدادات", tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -196,8 +198,8 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                 1 -> FoodScreen(vm)
                 2 -> ProgressScreen(vm)
                 3 -> VitalsScreen(vm)
-                4 -> MedsScreen(vm)
-                else -> SettingsScreen(vm, updateVm, appLock.isAvailable())
+                4 -> MedsScreen(vm, onOpenSettings = { requests++; settingsSection = "alerts#$requests"; tab = 5 })
+                else -> SettingsScreen(vm, updateVm, appLock.isAvailable(), settingsSection)
             }
         }
     }
