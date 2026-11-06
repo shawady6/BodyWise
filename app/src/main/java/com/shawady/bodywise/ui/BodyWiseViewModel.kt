@@ -69,6 +69,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     init {
         Reminders.ensureChannel(app)
         com.shawady.bodywise.notify.MedAlarms.ensureChannel(app)
+        com.shawady.bodywise.update.UpdateChecks.ensureChannel(app)
+        com.shawady.bodywise.update.UpdateChecks.schedule(app)
         apply(store.load())
         medStore.prune(LocalDate.now().minusDays(120))
         reloadMeds()
@@ -397,6 +399,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setThemeMode(mode: Int) = update { it.copy(themeMode = mode) }
     fun setAppLock(enabled: Boolean) = update { it.copy(appLock = enabled) }
+
+    fun setUpdateNotices(enabled: Boolean) = update { it.copy(updateNotices = enabled) }
 
     fun setMedTone(uri: String?) {
         update { it.copy(medTone = uri) }

@@ -71,6 +71,8 @@ data class AppSettings(
     val autoBackupUri: String? = null,
     val lastAutoBackup: String? = null,
     val onboarded: Boolean = false,
+    /** Notify when a new version is published (checked about twice a day when online). */
+    val updateNotices: Boolean = true,
     /** Ringtone for medication alarms (content URI string); null = system alarm sound. */
     val medTone: String? = null
 )

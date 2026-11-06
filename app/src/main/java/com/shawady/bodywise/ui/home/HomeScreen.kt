@@ -49,7 +49,7 @@ private val amber = Color(0xFFE08A00)
 
 /** Tab numbers: 1 غذائي، 2 قياساتي، 3 حيوياتي، 4 روشتتي. */
 @Composable
-fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
+fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.UpdateViewModel, onNavigate: (Int) -> Unit) {
     val now by produceState(LocalDateTime.now()) {
         while (true) { delay(30_000); value = LocalDateTime.now() }
     }
@@ -66,6 +66,13 @@ fun HomeScreen(vm: BodyWiseViewModel, onNavigate: (Int) -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (updateVm.available && !updateVm.prompt) {
+            AppCard {
+                SectionTitle("🎉", "فيه تحديث جديد ${updateVm.release?.tag.orEmpty()}")
+                Hint("اختياري، وبياناتك مش بتتمسح.")
+                Button(onClick = { updateVm.showPrompt() }, modifier = Modifier.fillMaxWidth()) { Text("عرض التحديث") }
+            }
+        }
         val takenToday = slots.count { it.second == SlotState.TAKEN }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
             Text(

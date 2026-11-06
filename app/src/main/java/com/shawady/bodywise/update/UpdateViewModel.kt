@@ -32,6 +32,13 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
     var readyFile by mutableStateOf<File?>(null)
         private set
 
+    /** True while the "new version" dialog should be on screen. Closing it never blocks the app. */
+    var prompt by mutableStateOf(false)
+        private set
+    private var autoChecked = false
+    private var autoInstall = false
+    private val prefs = app.getSharedPreferences("bodywise_update", android.content.Context.MODE_PRIVATE)
+
     init {
         viewModelScope.launch {
             InstallEvents.message.collect { text ->
@@ -41,6 +48,40 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /** Quiet check once per app launch; shows the dialog unless the person already said "later" for this version recently. */
+    fun autoCheck() {
+        if (autoChecked || checking || downloading) return
+        autoChecked = true
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { UpdateManager.fetchLatest() }.onSuccess { info ->
+                release = info
+                readyFile = null
+                available = versionIsNewer(info.tag, BuildConfig.VERSION_NAME)
+                if (available) {
+                    message = "متاح تحديث ${info.tag}. نزّله وثبّته من هنا."
+                    val sameTag = prefs.getString("dismissed_tag", null) == info.tag
+                    val recent = System.currentTimeMillis() - prefs.getLong("dismissed_at", 0L) < 12L * 60 * 60 * 1000
+                    if (!(sameTag && recent)) prompt = true
+                }
+            }
+        }
+    }
+
+    fun showPrompt() { prompt = true }
+
+    /** "Later": hides the dialog; the home banner and Settings keep offering the update. */
+    fun dismissPrompt() {
+        prompt = false
+        release?.let { prefs.edit().putString("dismissed_tag", it.tag).putLong("dismissed_at", System.currentTimeMillis()).apply() }
+    }
+
+    /** "Update now": downloads, then opens Android's installer (which still asks for approval). */
+    fun updateNow() {
+        if (readyFile != null) { prompt = false; install(); return }
+        autoInstall = true
+        download()
     }
 
     fun check() {
@@ -73,8 +114,9 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
                     readyFile = file
                     progress = 1f
                     message = "اكتمل التنزيل. اضغط تثبيت التحديث."
+                    if (autoInstall) { autoInstall = false; prompt = false; install() }
                 }
-                .onFailure { message = "فشل تنزيل التحديث: ${it.message ?: "خطأ غير معروف"}" }
+                .onFailure { autoInstall = false; message = "فشل تنزيل التحديث: ${it.message ?: "خطأ غير معروف"}" }
             downloading = false
         }
     }

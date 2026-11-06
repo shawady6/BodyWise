@@ -195,6 +195,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
         item {
             SettingsSection("update", "⬇️", "تحديث التطبيق", openId, { openId = it }) {
                 Hint("الإصدار المثبت: ${BuildConfig.VERSION_NAME}")
+                SwitchRow("تنبيه لما ينزل تحديث جديد", "بيتأكد مرتين في اليوم لما يكون فيه نت، والتحديث دايمًا اختياري", settings.updateNotices) { vm.setUpdateNotices(it) }
                 Hint(updateVm.message)
                 Button(onClick = { updateVm.check() }, enabled = !updateVm.checking && !updateVm.downloading, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.SystemUpdate, null); Spacer(Modifier.width(8.dp))

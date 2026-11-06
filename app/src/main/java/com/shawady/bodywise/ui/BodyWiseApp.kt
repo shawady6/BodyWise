@@ -155,6 +155,8 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
     var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
     var requests by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) { updateVm.autoCheck() }
+    if (updateVm.prompt) UpdatePrompt(updateVm)
     LaunchedEffect(vm.toast) {
         vm.toast?.let {
             snackbar.showSnackbar(it)
@@ -194,7 +196,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                 }
             }
             when (tab) {
-                0 -> HomeScreen(vm) { tab = it }
+                0 -> HomeScreen(vm, updateVm) { tab = it }
                 1 -> FoodScreen(vm)
                 2 -> ProgressScreen(vm)
                 3 -> VitalsScreen(vm)
@@ -203,4 +205,31 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
             }
         }
     }
+}
+
+@Composable
+private fun UpdatePrompt(updateVm: UpdateViewModel) {
+    val tag = updateVm.release?.tag.orEmpty()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { updateVm.dismissPrompt() },
+        title = { Text("🎉 فيه تحديث جديد") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("الإصدار $tag متاح. الإصدار اللي معاك: ${com.shawady.bodywise.BuildConfig.VERSION_NAME}.")
+                if (updateVm.downloading) {
+                    androidx.compose.material3.LinearProgressIndicator(progress = { updateVm.progress }, modifier = Modifier.fillMaxWidth())
+                    Hint("جاري التنزيل: ${(updateVm.progress * 100).toInt()}%")
+                } else {
+                    Hint(updateVm.message)
+                    Hint("التحديث اختياري، وبياناتك مش بتتمسح. وتقدر تحدّث بعدين من الرئيسية أو الإعدادات.")
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { updateVm.updateNow() }, enabled = !updateVm.downloading) { Text("حدّث الآن") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = { updateVm.dismissPrompt() }) { Text(if (updateVm.downloading) "إخفاء" else "لاحقًا") }
+        }
+    )
 }
