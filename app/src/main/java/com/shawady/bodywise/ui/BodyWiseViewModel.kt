@@ -52,6 +52,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     val doctors = mutableStateListOf<com.shawady.bodywise.data.Doctor>()
     val appointments = mutableStateListOf<com.shawady.bodywise.data.Appointment>()
     val medDocs = mutableStateListOf<com.shawady.bodywise.data.MedicalDoc>()
+    val people = mutableStateListOf<com.shawady.bodywise.data.Person>()
     var medProfile by mutableStateOf(com.shawady.bodywise.data.MedicalProfile())
         private set
     var waterGoal by mutableIntStateOf(8)
@@ -104,7 +105,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         meals.toMap(), water.toMap(), measurements.toList(), photos.toList(), waterGoal,
         notes.toMap(), heightCm, targetWeight, vitals.toList(),
         medStore.loadMeds(), medStore.loadLogs().values.toList(),
-        healthStore.loadDoctors(), healthStore.loadAppointments(), healthStore.loadProfile(), healthStore.loadDocs()
+        healthStore.loadDoctors(), healthStore.loadAppointments(), healthStore.loadProfile(), healthStore.loadDocs(), healthStore.loadPeople()
     )
 
     private fun persist() = store.save(snapshot())
@@ -290,6 +291,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         doctors.clear(); doctors.addAll(healthStore.loadDoctors().sortedBy { it.name })
         appointments.clear(); appointments.addAll(healthStore.loadAppointments().sortedBy { it.at })
         medDocs.clear(); medDocs.addAll(healthStore.loadDocs().sortedByDescending { it.date })
+        people.clear(); people.addAll(healthStore.loadPeople())
         medProfile = healthStore.loadProfile()
     }
 
@@ -338,6 +340,32 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         offerUndo(UndoRequest("اتحذف المستند ${d.title}",
             undo = { healthStore.upsertDoc(d); reloadHealth() },
             commit = { d.photo?.let { File(store.photosDir, it).delete() } }))
+    }
+
+    // ---- People I look after ----
+    fun setCareEnabled(enabled: Boolean) = update { it.copy(careEnabled = enabled) }
+
+    /** Returns an error message, or null when added. */
+    fun addPerson(name: String): String? {
+        val clean = name.trim()
+        if (clean.isBlank()) return "اكتب الاسم"
+        if (people.size >= com.shawady.bodywise.data.MAX_PEOPLE) return "الحد الأقصى ${com.shawady.bodywise.data.MAX_PEOPLE} أشخاص"
+        if (people.any { it.name == clean } || clean == com.shawady.bodywise.data.ME_LABEL) return "الاسم ده موجود"
+        healthStore.savePeople(people.toList() + com.shawady.bodywise.data.Person(java.util.UUID.randomUUID().toString(), clean))
+        reloadHealth()
+        return null
+    }
+
+    /** [deleteData] removes the person's medications and appointments; otherwise they move to the owner. */
+    fun deletePerson(person: com.shawady.bodywise.data.Person, deleteData: Boolean) {
+        val meds = medStore.loadMeds().filter { it.personId == person.id }
+        meds.forEach { if (deleteData) { medStore.delete(it.id); it.photo?.let { p -> File(store.photosDir, p).delete() } } else medStore.upsert(it.copy(personId = null)) }
+        healthStore.loadAppointments().filter { it.personId == person.id }.forEach {
+            if (deleteData) healthStore.deleteAppointment(it.id) else healthStore.upsertAppointment(it.copy(personId = null))
+        }
+        healthStore.savePeople(healthStore.loadPeople().filter { it.id != person.id })
+        medsChanged()
+        apptsChanged()
     }
 
     // ---- Vitals ----
@@ -447,7 +475,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
                 persist()
                 medStore.replaceAll(restored.medications, restored.doseLogs)
                 medsChanged()
-                healthStore.replaceAll(restored.doctors, restored.appointments, restored.medProfile, restored.medDocs)
+                healthStore.replaceAll(restored.doctors, restored.appointments, restored.medProfile, restored.medDocs, restored.people)
+                if (restored.people.isNotEmpty()) update { it.copy(careEnabled = true) }
                 apptsChanged()
                 oldFiles.forEach { File(store.photosDir, it).delete() }
                 WaterWidgetProvider.refresh(context)

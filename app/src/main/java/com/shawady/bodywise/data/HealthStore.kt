@@ -13,6 +13,12 @@ class HealthStore(context: Context) {
     fun loadProfile(): MedicalProfile = synchronized(LOCK) { runCatching { SnapshotJson.profileFromJson(JSONObject(prefs.getString("med_profile", "{}") ?: "{}")) }.getOrDefault(MedicalProfile()) }
     fun loadDocs(): List<MedicalDoc> = synchronized(LOCK) { runCatching { SnapshotJson.docsFromJson(JSONArray(prefs.getString("med_docs", "[]") ?: "[]")) }.getOrDefault(emptyList()) }
 
+    fun loadPeople(): List<Person> = synchronized(LOCK) { runCatching { SnapshotJson.peopleFromJson(JSONArray(prefs.getString("people", "[]") ?: "[]")) }.getOrDefault(emptyList()) }
+
+    fun savePeople(list: List<Person>) = synchronized(LOCK) {
+        prefs.edit().putString("people", SnapshotJson.peopleToJson(list).toString()).commit()
+    }
+
     fun upsertDoctor(d: Doctor) = synchronized(LOCK) {
         val list = loadDoctorsRaw().toMutableList()
         val i = list.indexOfFirst { it.id == d.id }
@@ -50,8 +56,9 @@ class HealthStore(context: Context) {
         prefs.edit().putString("med_docs", SnapshotJson.docsToJson(loadDocsRaw().filter { it.id != id }).toString()).commit()
     }
 
-    fun replaceAll(doctors: List<Doctor>, appts: List<Appointment>, profile: MedicalProfile, docs: List<MedicalDoc>) = synchronized(LOCK) {
+    fun replaceAll(doctors: List<Doctor>, appts: List<Appointment>, profile: MedicalProfile, docs: List<MedicalDoc>, people: List<Person>) = synchronized(LOCK) {
         prefs.edit()
+            .putString("people", SnapshotJson.peopleToJson(people).toString())
             .putString("doctors", SnapshotJson.doctorsToJson(doctors).toString())
             .putString("appointments", SnapshotJson.appointmentsToJson(appts).toString())
             .putString("med_profile", SnapshotJson.profileToJson(profile).toString())

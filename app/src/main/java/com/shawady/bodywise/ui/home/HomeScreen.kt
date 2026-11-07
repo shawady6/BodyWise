@@ -60,7 +60,7 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
     val lastWeight = weights.firstOrNull()
     val alerts = dashboardAlerts(
         now, slots, vm.medications, latestVitals, vm.waterFor(today), vm.waterGoal, vm.measurements.firstOrNull()?.date,
-        vm.appointments.toList(), vm.vitals.toList()
+        vm.appointments.toList(), vm.vitals.toList(), vm.people.toList()
     )
 
     Column(
@@ -106,7 +106,7 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(slot.time.format12(), fontWeight = FontWeight.Bold)
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                        Text(slot.med.name, fontWeight = FontWeight.SemiBold)
+                        Text(com.shawady.bodywise.data.medLabel(slot.med, vm.people), fontWeight = FontWeight.SemiBold)
                         Hint(listOf(slot.med.dose, slot.med.unit).filter { it.isNotBlank() }.joinToString(" ") + if (state == SlotState.MISSED) " • فاتت" else "")
                     }
                     Button(onClick = { vm.markDose(slot, DoseStatus.TAKEN) }) { Text("أخدتها") }
@@ -123,7 +123,7 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
                     val day = when (a.at.toLocalDate()) { today -> "النهارده"; today.plusDays(1) -> "بكرة"; else -> a.at.toLocalDate().toString() }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
+                            Text((com.shawady.bodywise.data.personName(a.personId, vm.people)?.let { "$it • " } ?: "") + a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
                             if (a.reason.isNotBlank()) Hint(a.reason)
                         }
                         Text("$day • ${a.at.toLocalTime().format12()}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)

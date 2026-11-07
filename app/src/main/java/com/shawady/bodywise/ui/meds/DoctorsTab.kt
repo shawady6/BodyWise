@@ -39,6 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.shawady.bodywise.data.Appointment
 import com.shawady.bodywise.data.Doctor
 import com.shawady.bodywise.data.dialNumber
+import com.shawady.bodywise.data.groupByPerson
+import com.shawady.bodywise.data.personName
+import com.shawady.bodywise.ui.components.PersonHeader
+import com.shawady.bodywise.ui.components.PersonPicker
 import com.shawady.bodywise.data.overdueAppointments
 import com.shawady.bodywise.data.upcomingAppointments
 import com.shawady.bodywise.data.whatsappNumber
@@ -80,6 +84,7 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     var apptEditor by remember { mutableStateOf<Appointment?>(null) }
     var addingAppt by remember { mutableStateOf(false) }
     var apptPrefillDoctor by remember { mutableStateOf<Doctor?>(null) }
+    var apptPrefillPerson by remember { mutableStateOf<String?>(null) }
     var finishing by remember { mutableStateOf<Appointment?>(null) }
 
     val upcoming = upcomingAppointments(vm.appointments, now)
@@ -89,7 +94,10 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     AppCard {
         SectionTitle("📅", "مواعيدك القادمة")
         if (upcoming.isEmpty()) Hint("مفيش مواعيد. أضف موعد وهنفكّرك الليلة اللي قبله وقبله بساعتين.")
-        upcoming.forEach { a -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }) }
+        groupByPerson(upcoming, { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
+            if (title != null) PersonHeader(title)
+            list.forEach { a -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }) }
+        }
         Button(onClick = { apptPrefillDoctor = null; addingAppt = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, null); Text("  موعد جديد")
         }
@@ -98,8 +106,11 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     if (overdue.isNotEmpty()) {
         AppCard {
             SectionTitle("❓", "عدّى ميعادها — اتزورت؟")
-            overdue.take(5).forEach { a ->
-                ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }, overdue = true)
+            groupByPerson(overdue.take(5), { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
+                if (title != null) PersonHeader(title)
+                list.forEach { a ->
+                    ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }, overdue = true)
+                }
             }
         }
     }
@@ -131,6 +142,7 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
             SectionTitle("🗂", "زيارات سابقة")
             past.take(15).forEach { a ->
                 Column(Modifier.fillMaxWidth()) {
+                    personName(a.personId, vm.people)?.let { Hint("👤 $it") }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
@@ -149,9 +161,9 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     }
     if (addingAppt || apptEditor != null) {
         AppointmentDialog(
-            vm, apptEditor, apptPrefillDoctor,
-            onDismiss = { addingAppt = false; apptEditor = null; apptPrefillDoctor = null },
-            onSave = { vm.saveAppointment(it); addingAppt = false; apptEditor = null; apptPrefillDoctor = null }
+            vm, apptEditor, apptPrefillDoctor, apptPrefillPerson,
+            onDismiss = { addingAppt = false; apptEditor = null; apptPrefillDoctor = null; apptPrefillPerson = null },
+            onSave = { vm.saveAppointment(it); addingAppt = false; apptEditor = null; apptPrefillDoctor = null; apptPrefillPerson = null }
         )
     }
     finishing?.let { a ->
@@ -163,6 +175,7 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
                 finishing = null
                 if (followUp) {
                     apptPrefillDoctor = vm.doctors.firstOrNull { it.id == a.doctorId } ?: Doctor("", a.doctorName)
+                    apptPrefillPerson = a.personId
                     addingAppt = true
                 }
             }
@@ -245,13 +258,14 @@ private fun DoctorDialog(initial: Doctor?, onDismiss: () -> Unit, onSave: (Docto
 }
 
 @Composable
-private fun AppointmentDialog(vm: BodyWiseViewModel, initial: Appointment?, prefill: Doctor?, onDismiss: () -> Unit, onSave: (Appointment) -> Unit) {
+private fun AppointmentDialog(vm: BodyWiseViewModel, initial: Appointment?, prefill: Doctor?, prefillPerson: String?, onDismiss: () -> Unit, onSave: (Appointment) -> Unit) {
     val start = initial?.at ?: LocalDateTime.now().plusDays(1).withHour(17).withMinute(0).withSecond(0).withNano(0)
     var doctorId by remember { mutableStateOf(initial?.doctorId ?: prefill?.id?.ifBlank { null }) }
     var doctorName by remember { mutableStateOf(initial?.doctorName ?: prefill?.name ?: "") }
     var date by remember { mutableStateOf(start.toLocalDate()) }
     var time by remember { mutableStateOf(start.toLocalTime()) }
     var reason by remember { mutableStateOf(initial?.reason ?: "") }
+    var personId by remember { mutableStateOf(initial?.personId ?: prefillPerson) }
     var error by remember { mutableStateOf<String?>(null) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
@@ -260,6 +274,7 @@ private fun AppointmentDialog(vm: BodyWiseViewModel, initial: Appointment?, pref
         title = { Text(if (initial == null) "موعد جديد" else "تعديل الموعد") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.settings.careEnabled && vm.people.isNotEmpty()) PersonPicker("الموعد لـ", vm.people, personId) { personId = it }
                 if (vm.doctors.isNotEmpty()) {
                     Hint("اختار دكتور من المسجلين:")
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -283,7 +298,7 @@ private fun AppointmentDialog(vm: BodyWiseViewModel, initial: Appointment?, pref
         confirmButton = {
             TextButton(onClick = {
                 if (doctorName.isBlank()) { error = "اكتب أو اختار الدكتور"; return@TextButton }
-                onSave(Appointment(initial?.id ?: UUID.randomUUID().toString(), doctorId, doctorName.trim(), LocalDateTime.of(date, time), reason.trim(), initial?.done ?: false, initial?.outcome ?: ""))
+                onSave(Appointment(initial?.id ?: UUID.randomUUID().toString(), doctorId, doctorName.trim(), LocalDateTime.of(date, time), reason.trim(), initial?.done ?: false, initial?.outcome ?: "", personId?.takeIf { id -> vm.people.any { it.id == id } }))
             }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }

@@ -99,7 +99,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
                 }
             }
             "daily" -> {
-                val runningOut = snapshot.medications.mapNotNull { m -> daysOfStockLeft(m)?.takeIf { it <= RUNOUT_WARN_DAYS }?.let { m.name to it } }
+                val runningOut = snapshot.medications.mapNotNull { m -> daysOfStockLeft(m)?.takeIf { it <= RUNOUT_WARN_DAYS }?.let { com.shawady.bodywise.data.medLabel(m, snapshot.people) to it } }
                 if (runningOut.isNotEmpty()) {
                     show(3, "💊 دواء قرّب يخلص", runningOut.joinToString("، ") { (n, d) -> if (d <= 0) "$n خلص" else "$n هيخلص بعد $d يوم" })
                 }

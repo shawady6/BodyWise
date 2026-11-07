@@ -98,3 +98,47 @@ class HealthTest {
         assertTrue(back.doctors.isEmpty() && back.medProfile.isEmpty())
     }
 }
+
+class CareTest {
+    private val people = listOf(Person("p1", "أحمد"), Person("p2", "ماما"))
+
+    @Test fun groupsMeFirstThenPeople() {
+        val items = listOf("a" to "p2", "b" to null, "c" to "p1", "d" to "gone", "e" to "p1")
+        val groups = groupByPerson(items, { it.second }, people, careEnabled = true)
+        assertEquals(listOf("أنا", "أحمد", "ماما"), groups.map { it.first })
+        assertEquals(listOf("b", "d"), groups[0].second.map { it.first })
+        assertEquals(listOf("c", "e"), groups[1].second.map { it.first })
+    }
+
+    @Test fun noGroupingWhenCareOffOrNoPeople() {
+        val items = listOf("a" to "p1", "b" to null)
+        assertEquals(1, groupByPerson(items, { it.second }, people, careEnabled = false).size)
+        assertEquals(null, groupByPerson(items, { it.second }, emptyList(), careEnabled = true).single().first)
+    }
+
+    @Test fun emptyGroupsAreSkipped() {
+        val groups = groupByPerson(listOf("a" to "p2"), { it.second }, people, careEnabled = true)
+        assertEquals(listOf("ماما"), groups.map { it.first })
+    }
+
+    @Test fun labelsAndRoundTrip() {
+        val med = Medication(
+            "m", "بنادول", "1", "قرص", listOf(LocalTime.of(8, 0)), emptySet(), LocalDate.of(2026, 11, 1), null,
+            "", "", null, null, LocalDateTime.of(2026, 11, 1, 0, 0), personId = "p1"
+        )
+        assertEquals("بنادول (أحمد)", medLabel(med, people))
+        assertEquals("بنادول", medLabel(med.copy(personId = null), people))
+        assertEquals("بنادول", medLabel(med.copy(personId = "gone"), people))
+        assertEquals("p1", SnapshotJson.medsFromJson(SnapshotJson.medsToJson(listOf(med))).first().personId)
+        assertNull(SnapshotJson.medsFromJson(SnapshotJson.medsToJson(listOf(med.copy(personId = null)))).first().personId)
+        val appt = Appointment("a", null, "د. س", LocalDateTime.of(2026, 11, 10, 17, 0), personId = "p2")
+        assertEquals("p2", SnapshotJson.appointmentsFromJson(SnapshotJson.appointmentsToJson(listOf(appt))).first().personId)
+        assertEquals(people, SnapshotJson.peopleFromJson(SnapshotJson.peopleToJson(people)))
+    }
+
+    @Test fun backupKeepsPeople() {
+        val back = SnapshotJson.fromBackup(SnapshotJson.toBackup(Snapshot(people = people), LocalDate.of(2026, 11, 8)))
+        assertEquals(people, back.people)
+        assertEquals(MAX_PEOPLE, 3)
+    }
+}

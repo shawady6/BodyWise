@@ -63,7 +63,8 @@ class MedWidgetProvider : AppWidgetProvider() {
                 .map { it to slotState(it, logs, now) }
                 .filter { it.second != SlotState.TAKEN && it.second != SlotState.SKIPPED }
             val views = RemoteViews(context.packageName, R.layout.widget_meds)
-            val lines = listOf(R.id.med_line1, R.id.med_line2, R.id.med_line3)
+            val lines = listOf(R.id.med_line1, R.id.med_line2, R.id.med_line3, R.id.med_line4, R.id.med_line5)
+            val people = com.shawady.bodywise.data.HealthStore(context).loadPeople()
             val first = pending.firstOrNull()
             if (meds.isEmpty()) {
                 views.setTextViewText(R.id.med_line1, "لسه ما أضفتش أدوية")
@@ -75,7 +76,7 @@ class MedWidgetProvider : AppWidgetProvider() {
                 if (item != null) {
                     val (slot, state) = item
                     val dose = listOf(slot.med.dose, slot.med.unit).filter { it.isNotBlank() }.joinToString(" ")
-                    views.setTextViewText(id, "${slot.time.format12()}  ${slot.med.name}" + (if (dose.isNotBlank()) " ($dose)" else "") + if (state == SlotState.MISSED) " • فاتت" else "")
+                    views.setTextViewText(id, "${slot.time.format12()}  ${com.shawady.bodywise.data.medLabel(slot.med, people)}" + (if (dose.isNotBlank()) " ($dose)" else "") + if (state == SlotState.MISSED) " • فاتت" else "")
                     views.setViewVisibility(id, View.VISIBLE)
                 } else if (!(i == 0 && (meds.isEmpty() || first == null))) {
                     views.setViewVisibility(id, View.GONE)
@@ -89,7 +90,7 @@ class MedWidgetProvider : AppWidgetProvider() {
                     context, "${slot.med.id}|${slot.time}".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
                 views.setOnClickPendingIntent(R.id.med_take, take)
-                views.setTextViewText(R.id.med_take, "أخدتها ✓ ${slot.med.name}")
+                views.setTextViewText(R.id.med_take, "أخدتها ✓ ${com.shawady.bodywise.data.medLabel(slot.med, people)}")
                 views.setViewVisibility(R.id.med_take, View.VISIBLE)
             } else {
                 views.setViewVisibility(R.id.med_take, View.GONE)

@@ -17,7 +17,8 @@ fun dashboardAlerts(
     waterGoal: Int,
     lastMeasurement: LocalDate?,
     appointments: List<Appointment> = emptyList(),
-    allVitals: List<VitalReading> = emptyList()
+    allVitals: List<VitalReading> = emptyList(),
+    people: List<Person> = emptyList()
 ): List<DashAlert> {
     val alerts = mutableListOf<DashAlert>()
     latestVitals.forEach { r ->
@@ -30,22 +31,22 @@ fun dashboardAlerts(
     todaySlots.forEach { (slot, state) ->
         val t = slot.time.format12()
         when (state) {
-            SlotState.MISSED -> alerts.add(DashAlert("فاتتك جرعة ${slot.med.name} (${t})", false))
-            SlotState.DUE, SlotState.SNOOZED -> alerts.add(DashAlert("وقت ${slot.med.name} دلوقتي (${t})", false))
+            SlotState.MISSED -> alerts.add(DashAlert("فاتتك جرعة ${medLabel(slot.med, people)} (${t})", false))
+            SlotState.DUE, SlotState.SNOOZED -> alerts.add(DashAlert("وقت ${medLabel(slot.med, people)} دلوقتي (${t})", false))
             else -> {}
         }
     }
     upcomingAppointments(appointments, now).filter { it.at.toLocalDate() <= now.toLocalDate().plusDays(1) }.forEach { a ->
         val day = if (a.at.toLocalDate() == now.toLocalDate()) "النهارده" else "بكرة"
-        alerts.add(DashAlert("📅 موعد ${a.doctorName.ifBlank { "الدكتور" }} $day ${a.at.toLocalTime().format12()}", false))
+        alerts.add(DashAlert("📅 موعد ${personName(a.personId, people) ?: ""} ${a.doctorName.ifBlank { "الدكتور" }} $day ${a.at.toLocalTime().format12()}".replace("  ", " "), false))
     }
     overdueAppointments(appointments, now).filter { Duration.between(it.at, now).toDays() < 3 }.forEach { a ->
         alerts.add(DashAlert("📅 موعد ${a.doctorName.ifBlank { "الدكتور" }} عدّى، علّم عليه \"تمت\" لو رحت", false))
     }
     meds.forEach { med ->
         val days = daysOfStockLeft(med)
-        if (med.needsRefill()) alerts.add(DashAlert("${med.name} محتاج تجديد" + (days?.let { " (يكفي $it يوم)" } ?: ""), false))
-        else if (days != null && days <= RUNOUT_WARN_DAYS) alerts.add(DashAlert("${med.name} هيخلص بعد $days يوم", false))
+        if (med.needsRefill()) alerts.add(DashAlert("${medLabel(med, people)} محتاج تجديد" + (days?.let { " (يكفي $it يوم)" } ?: ""), false))
+        else if (days != null && days <= RUNOUT_WARN_DAYS) alerts.add(DashAlert("${medLabel(med, people)} هيخلص بعد $days يوم", false))
     }
     overdueVitals(allVitals, now).forEach { (type, days) ->
         alerts.add(DashAlert("${type.label}: آخر قياس من $days يوم", false))

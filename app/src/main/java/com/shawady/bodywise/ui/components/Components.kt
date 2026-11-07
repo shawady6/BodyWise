@@ -194,3 +194,27 @@ fun LineChart(points: List<Pair<LocalDate, Double>>, unit: String, modifier: Mod
         }
     }
 }
+
+
+/** Heading for a person's group of medications / appointments. */
+@Composable
+fun PersonHeader(text: String, modifier: Modifier = Modifier) {
+    Text(
+        "👤 $text", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.fillMaxWidth().padding(top = 4.dp)
+    )
+}
+
+/** "الدواء لـ / الموعد لـ" chooser: أنا first, then the people. */
+@Composable
+fun PersonPicker(label: String, people: List<com.shawady.bodywise.data.Person>, selectedId: String?, onSelect: (String?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.FilterChip(selected = selectedId == null, onClick = { onSelect(null) }, label = { Text(com.shawady.bodywise.data.ME_LABEL) })
+            people.forEach { p ->
+                androidx.compose.material3.FilterChip(selected = selectedId == p.id, onClick = { onSelect(p.id) }, label = { Text(p.name) })
+            }
+        }
+    }
+}

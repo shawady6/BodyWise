@@ -141,7 +141,7 @@ object MedAlarms {
         val text = listOfNotNull(dose.ifBlank { null }, extra).joinToString(" • ").ifBlank { "حان موعد الدواء" }
         val builder = NotificationCompat.Builder(context, channelId(context))
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("💊 ${med.name} — ${time.format12()}")
+            .setContentTitle("💊 ${com.shawady.bodywise.data.medLabel(med, com.shawady.bodywise.data.HealthStore(context).loadPeople())} — ${time.format12()}")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text + if (med.notes.isNotBlank()) "\n${med.notes}" else ""))
             .setPriority(NotificationCompat.PRIORITY_MAX)

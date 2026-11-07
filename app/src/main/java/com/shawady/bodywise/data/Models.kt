@@ -63,7 +63,8 @@ data class Snapshot(
     val doctors: List<Doctor> = emptyList(),
     val appointments: List<Appointment> = emptyList(),
     val medProfile: MedicalProfile = MedicalProfile(),
-    val medDocs: List<MedicalDoc> = emptyList()
+    val medDocs: List<MedicalDoc> = emptyList(),
+    val people: List<Person> = emptyList()
 )
 
 /** themeMode: 0 = follow system, 1 = light, 2 = dark. */
@@ -80,5 +81,7 @@ data class AppSettings(
     /** Ringtone for medication alarms (content URI string); null = system alarm sound. */
     val medTone: String? = null,
     /** Daily 10 AM check: medicines about to run out and vitals not recorded lately. */
-    val dailyChecks: Boolean = true
+    val dailyChecks: Boolean = true,
+    /** "I look after someone": shows the person picker for medications and appointments. */
+    val careEnabled: Boolean = false
 )

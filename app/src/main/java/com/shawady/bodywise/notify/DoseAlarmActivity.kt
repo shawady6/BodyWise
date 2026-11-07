@@ -83,6 +83,8 @@ class DoseAlarmActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text("💊", fontSize = 64.sp)
+                            val forPerson = com.shawady.bodywise.data.personName(med.personId, com.shawady.bodywise.data.HealthStore(this@DoseAlarmActivity).loadPeople())
+                            if (forPerson != null) Text("الدواء لـ $forPerson", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                             Text("وقت الدواء", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(time.format12(), fontSize = 44.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.height(8.dp))

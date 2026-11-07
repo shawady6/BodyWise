@@ -34,7 +34,9 @@ data class Medication(
     /** Quantity (in units) at the last purchase or refill; "low" is measured against it. */
     val fullQuantity: Double? = null,
     /** Price of one box. */
-    val price: Double? = null
+    val price: Double? = null,
+    /** null = the app owner. */
+    val personId: String? = null
 )
 
 data class DoseLog(

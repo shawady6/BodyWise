@@ -99,7 +99,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
     LaunchedEffect(section) {
         val id = section?.substringBefore('#')?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         openId = id
-        val index = listOf("look", "data", "reminders", "alerts", "security", "backup", "update").indexOf(id)
+        val index = listOf("look", "data", "reminders", "alerts", "care", "security", "backup", "update").indexOf(id)
         if (index >= 0) listState.animateScrollToItem(index)
     }
 
@@ -152,6 +152,11 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
         item {
             SettingsSection("alerts", "💊", "تنبيهات الأدوية", openId, { openId = it }) {
                 AlertsPanel(vm)
+            }
+        }
+        item {
+            SettingsSection("care", "👨‍👧", "الرعاية", openId, { openId = it }) {
+                CarePanel(vm)
             }
         }
         item {

@@ -28,7 +28,8 @@ class BodyWiseStore(private val context: Context) {
         doctors = HealthStore(context).loadDoctors(),
         appointments = HealthStore(context).loadAppointments(),
         medProfile = HealthStore(context).loadProfile(),
-        medDocs = HealthStore(context).loadDocs()
+        medDocs = HealthStore(context).loadDocs(),
+        people = HealthStore(context).loadPeople()
     )
 
     fun save(snapshot: Snapshot) {
@@ -61,7 +62,8 @@ class SettingsStore(context: Context) {
             onboarded = prefs.getBoolean("onboarded", false),
             updateNotices = prefs.getBoolean("update_notices", true),
             medTone = prefs.getString("med_tone", null),
-            dailyChecks = prefs.getBoolean("daily_checks", true)
+            dailyChecks = prefs.getBoolean("daily_checks", true),
+            careEnabled = prefs.getBoolean("care_enabled", false)
         )
     }
 
@@ -77,6 +79,7 @@ class SettingsStore(context: Context) {
             .putBoolean("update_notices", settings.updateNotices)
             .putString("med_tone", settings.medTone)
             .putBoolean("daily_checks", settings.dailyChecks)
+            .putBoolean("care_enabled", settings.careEnabled)
             .apply()
     }
 }

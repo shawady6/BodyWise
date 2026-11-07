@@ -28,7 +28,7 @@ fun HealthScreen(vm: BodyWiseViewModel, page: Int, onPage: (Int) -> Unit) {
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(selected = current == 0, onClick = { onPage(0) }, label = { Text("⚖️ الوزن والصور") })
+            FilterChip(selected = current == 0, onClick = { onPage(0) }, label = { Text("⚖️ الوزن") })
             vitals.forEachIndexed { i, t ->
                 FilterChip(selected = current == i + 1, onClick = { onPage(i + 1) }, label = { Text("${t.emoji} ${t.label}") })
             }

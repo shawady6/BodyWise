@@ -81,6 +81,9 @@ import com.shawady.bodywise.data.DoseStatus
 import com.shawady.bodywise.data.MED_INSTRUCTIONS
 import com.shawady.bodywise.data.MED_UNITS
 import com.shawady.bodywise.data.Medication
+import com.shawady.bodywise.data.groupByPerson
+import com.shawady.bodywise.data.medLabel
+import com.shawady.bodywise.ui.components.PersonHeader
 import com.shawady.bodywise.data.daysOfStockLeft
 import com.shawady.bodywise.data.STRIP_UNITS
 import com.shawady.bodywise.data.SlotState
@@ -189,7 +192,10 @@ private fun DosesTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     AppCard {
         SectionTitle("💊", "جرعات النهارده")
         if (todaySlots.isEmpty()) Hint(if (vm.medications.isEmpty()) "لسه ما أضفتش أدوية. من تبويب \"الأدوية\"." else "مفيش جرعات النهارده.")
-        todaySlots.forEach { slot -> SlotRow(vm, slot, slotState(slot, vm.doseLogs, now)) }
+        groupByPerson(todaySlots, { it.med.personId }, vm.people, vm.settings.careEnabled).forEach { (title, slots) ->
+            if (title != null) PersonHeader(title)
+            slots.forEach { slot -> SlotRow(vm, slot, slotState(slot, vm.doseLogs, now)) }
+        }
     }
     HistoryCard(vm, now)
 }
@@ -249,7 +255,7 @@ private fun HistoryCard(vm: BodyWiseViewModel, now: LocalDateTime) {
                     SlotState.MISSED -> "❌ فاتت"
                     else -> "🔔 مستنية"
                 } + if ((log?.snoozes ?: 0) > 0) "  (اتأجلت ${log?.snoozes} مرة)" else ""
-                Hint("${slot.time.format12()}  ${slot.med.name}  —  $mark")
+                Hint("${slot.time.format12()}  ${medLabel(slot.med, vm.people)}  —  $mark")
             }
         }
         if (!any) Hint("لسه مفيش سجل.")
@@ -271,7 +277,10 @@ private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medicatio
             Hint("أضف دواءك الأول وهنفكّرك بمواعيده.")
         }
     }
-    vm.medications.forEach { med -> MedCard(vm, med, onEdit) }
+    groupByPerson(vm.medications.toList(), { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, meds) ->
+        if (title != null) PersonHeader(title)
+        meds.forEach { med -> MedCard(vm, med, onEdit) }
+    }
     OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("⚙️ إعدادات التنبيهات والنغمة") }
 }
 
@@ -284,7 +293,7 @@ private fun RefillTab(vm: BodyWiseViewModel, refillList: List<Medication>, onRef
         if (refillList.isEmpty()) Hint("كل أدويتك كميتها كويسة ✅ (أي دواء يقل عن 10% من آخر كمية اشتريتها هيظهر هنا).")
         refillList.forEach { med ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(med.name, fontWeight = FontWeight.Bold)
+                Text(medLabel(med, vm.people), fontWeight = FontWeight.Bold)
                 med.stockText()?.let { Text("المتبقي: $it", color = Status.danger(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
                 val pct = med.percentLeft()
                 if (pct != null) {

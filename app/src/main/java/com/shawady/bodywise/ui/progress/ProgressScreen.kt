@@ -78,7 +78,7 @@ private class MeasurementEditor(val initial: Measurement?)
 @Composable
 fun ProgressScreen(vm: BodyWiseViewModel) {
     val context = LocalContext.current
-    var metric by remember { mutableStateOf(Metric.WEIGHT) }
+    val metric = Metric.WEIGHT
     var measurementEditor by remember { mutableStateOf<MeasurementEditor?>(null) }
     var showCompare by remember { mutableStateOf(false) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
@@ -103,13 +103,6 @@ fun ProgressScreen(vm: BodyWiseViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(Metric.entries.toList()) { m ->
-                    FilterChip(selected = m == metric, onClick = { metric = m }, label = { Text(m.label) })
-                }
-            }
-        }
         item {
             AppCard {
                 Text("تطور ${metric.label}", fontWeight = FontWeight.Bold, fontSize = 18.sp)

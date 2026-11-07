@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 6
+    const val VERSION = 7
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -150,7 +150,8 @@ object SnapshotJson {
                 .put("unitsPerStrip", m.unitsPerStrip?.toString() ?: "")
                 .put("unitsPerBox", m.unitsPerBox?.let { formatNumber(it) } ?: "")
                 .put("fullQuantity", m.fullQuantity?.let { formatNumber(it) } ?: "")
-                .put("price", m.price?.let { formatNumber(it) } ?: ""))
+                .put("price", m.price?.let { formatNumber(it) } ?: "")
+                .put("person", m.personId ?: ""))
         }
         return array
     }
@@ -177,7 +178,8 @@ object SnapshotJson {
             unitsPerStrip = item.optString("unitsPerStrip").toIntOrNull(),
             unitsPerBox = parseDecimal(item.optString("unitsPerBox")),
             fullQuantity = parseDecimal(item.optString("fullQuantity")),
-            price = parseDecimal(item.optString("price"))
+            price = parseDecimal(item.optString("price")),
+            personId = item.optString("person").ifBlank { null }
         )
     }
 
@@ -221,7 +223,7 @@ object SnapshotJson {
         val array = JSONArray()
         list.forEach { a ->
             array.put(JSONObject().put("id", a.id).put("doctorId", a.doctorId ?: "").put("doctorName", a.doctorName)
-                .put("at", a.at.toString()).put("reason", a.reason).put("done", a.done).put("outcome", a.outcome))
+                .put("at", a.at.toString()).put("reason", a.reason).put("done", a.done).put("outcome", a.outcome).put("person", a.personId ?: ""))
         }
         return array
     }
@@ -229,7 +231,18 @@ object SnapshotJson {
     fun appointmentsFromJson(array: JSONArray): List<Appointment> = List(array.length()) { i ->
         val o = array.getJSONObject(i)
         Appointment(o.getString("id"), o.optString("doctorId").ifBlank { null }, o.optString("doctorName"),
-            java.time.LocalDateTime.parse(o.getString("at")), o.optString("reason"), o.optBoolean("done", false), o.optString("outcome"))
+            java.time.LocalDateTime.parse(o.getString("at")), o.optString("reason"), o.optBoolean("done", false), o.optString("outcome"), o.optString("person").ifBlank { null })
+    }
+
+    fun peopleToJson(list: List<Person>): JSONArray {
+        val array = JSONArray()
+        list.forEach { array.put(JSONObject().put("id", it.id).put("name", it.name)) }
+        return array
+    }
+
+    fun peopleFromJson(array: JSONArray): List<Person> = List(array.length()) { i ->
+        val o = array.getJSONObject(i)
+        Person(o.getString("id"), o.getString("name"))
     }
 
     fun profileToJson(p: MedicalProfile): JSONObject = JSONObject().put("bloodType", p.bloodType).put("allergies", p.allergies)
@@ -271,6 +284,7 @@ object SnapshotJson {
         .put("appointments", appointmentsToJson(snapshot.appointments))
         .put("medProfile", profileToJson(snapshot.medProfile))
         .put("medDocs", docsToJson(snapshot.medDocs))
+        .put("people", peopleToJson(snapshot.people))
         .put("settings", JSONObject()
             .put("waterGoal", snapshot.waterGoal)
             .put("heightCm", snapshot.heightCm?.let { formatNumber(it) } ?: "")
@@ -294,7 +308,8 @@ object SnapshotJson {
             doctors = json.optJSONArray("doctors")?.let { doctorsFromJson(it) } ?: emptyList(),
             appointments = json.optJSONArray("appointments")?.let { appointmentsFromJson(it) } ?: emptyList(),
             medProfile = json.optJSONObject("medProfile")?.let { profileFromJson(it) } ?: MedicalProfile(),
-            medDocs = json.optJSONArray("medDocs")?.let { docsFromJson(it) } ?: emptyList()
+            medDocs = json.optJSONArray("medDocs")?.let { docsFromJson(it) } ?: emptyList(),
+            people = json.optJSONArray("people")?.let { peopleFromJson(it) } ?: emptyList()
         )
     }
 }

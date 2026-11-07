@@ -23,8 +23,39 @@ data class Appointment(
     val at: LocalDateTime,
     val reason: String = "",
     val done: Boolean = false,
-    val outcome: String = ""
+    val outcome: String = "",
+    /** null = the app owner. */
+    val personId: String? = null
 )
+
+/** Someone the user looks after. Name only. */
+data class Person(val id: String, val name: String)
+
+const val MAX_PEOPLE = 3
+const val ME_LABEL = "أنا"
+
+/** Name of the person a medication/appointment belongs to; null for the owner or an unknown id. */
+fun personName(personId: String?, people: List<Person>): String? = personId?.let { id -> people.firstOrNull { it.id == id }?.name }
+
+/** "دواء (أحمد)" for someone else's medication, plain name for the owner's. */
+fun medLabel(med: Medication, people: List<Person>): String = personName(med.personId, people)?.let { "${med.name} ($it)" } ?: med.name
+
+/**
+ * Groups items under "أنا" first, then each person in order. Without care mode (or without people) there is a single
+ * group with a null title. Items that point to a deleted person fall under "أنا".
+ */
+fun <T> groupByPerson(items: List<T>, personOf: (T) -> String?, people: List<Person>, careEnabled: Boolean): List<Pair<String?, List<T>>> {
+    if (!careEnabled || people.isEmpty()) return listOf(null to items)
+    val known = people.map { it.id }.toSet()
+    val mine = items.filter { personOf(it) == null || personOf(it) !in known }
+    val result = mutableListOf<Pair<String?, List<T>>>()
+    if (mine.isNotEmpty()) result.add(ME_LABEL to mine)
+    people.forEach { person ->
+        val theirs = items.filter { personOf(it) == person.id }
+        if (theirs.isNotEmpty()) result.add(person.name to theirs)
+    }
+    return result
+}
 
 data class MedicalProfile(
     val bloodType: String = "",
