@@ -222,9 +222,10 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
         step++
     }
 
-    Dialog(onDismissRequest = { dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // The dialog window handles the status/navigation bars and the keyboard itself (adjustResize), so nothing is hidden at the bottom.
+    Dialog(onDismissRequest = { dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+            Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { dismiss() }) { Icon(Icons.Default.Close, "إغلاق") }
                     Text(if (initial == null) "دواء جديد" else "تعديل الدواء", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
