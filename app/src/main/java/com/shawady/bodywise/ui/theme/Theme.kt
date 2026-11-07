@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF347B52),
@@ -31,4 +32,12 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun BodyWiseTheme(dark: Boolean, content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
+}
+
+/** Meaning colors with light and dark variants, so warnings stay readable in both themes. */
+object Status {
+    @Composable private fun dark() = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    @Composable fun danger(): Color = if (dark()) Color(0xFFFF8A80) else Color(0xFFD32F2F)
+    @Composable fun warning(): Color = if (dark()) Color(0xFFFFB74D) else Color(0xFFC77700)
+    @Composable fun success(): Color = if (dark()) Color(0xFF81C784) else Color(0xFF2E7D32)
 }

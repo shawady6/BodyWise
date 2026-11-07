@@ -1,5 +1,6 @@
 package com.shawady.bodywise.ui.settings
 
+import com.shawady.bodywise.ui.theme.Status
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
@@ -38,8 +39,6 @@ import com.shawady.bodywise.notify.MedAlarms
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.Hint
 
-private val amber = Color(0xFFE08A00)
-private val green = Color(0xFF2E7D32)
 
 /**
  * Everything medication alarms need from the phone: status of each permission, a button that walks through
@@ -100,7 +99,7 @@ fun AlertsPanel(vm: BodyWiseViewModel) {
             Button(onClick = next, modifier = Modifier.fillMaxWidth()) { Text("اسمح بالصلاحيات الناقصة ($missing)") }
             Hint("اضغط الزر وفعّل الصلاحية، وارجع للتطبيق، واضغطه تاني للصلاحية اللي بعدها.")
         } else {
-            Text("✅ كل الصلاحيات تمام", color = green, fontSize = 14.sp)
+            Text("✅ كل الصلاحيات تمام", color = Status.success(), fontSize = 14.sp)
         }
         StatusLine("الإشعارات", "علشان يوصلك تنبيه الدواء", notificationsOn, askNotifications)
         StatusLine("المواعيد الدقيقة", "علشان التنبيه يجي في الدقيقة المظبوطة", exactOk, askExact)
@@ -135,7 +134,7 @@ private fun open(context: Context, intent: Intent) {
 @Composable
 private fun StatusLine(label: String, why: String, ok: Boolean, onFix: () -> Unit) {
     Column {
-        Text((if (ok) "✅ " else "⚠️ ") + label + (if (ok) " — تمام" else " — محتاج تفعيل"), fontSize = 13.sp, color = if (ok) green else amber)
+        Text((if (ok) "✅ " else "⚠️ ") + label + (if (ok) " — تمام" else " — محتاج تفعيل"), fontSize = 13.sp, color = if (ok) Status.success() else Status.warning())
         if (!ok) Hint(why)
     }
 }

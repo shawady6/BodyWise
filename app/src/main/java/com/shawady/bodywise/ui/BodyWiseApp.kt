@@ -3,6 +3,7 @@ package com.shawady.bodywise.ui
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -173,26 +174,25 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية", fontSize = 10.sp, maxLines = 1) })
-                NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي", fontSize = 10.sp, maxLines = 1) })
-                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي", fontSize = 10.sp, maxLines = 1) })
-                NavigationBarItem(tab == 3, { tab = 3 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي", fontSize = 10.sp, maxLines = 1) })
-                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي", fontSize = 10.sp, maxLines = 1) })
+                NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 3, { tab = 3 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي", fontSize = 11.sp, maxLines = 1) })
             }
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("BODYWISE", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                    Text(
-                        when (tab) { 0 -> "الرئيسية"; 1 -> "غذائي"; 2 -> "قياساتي"; 3 -> "حيوياتي"; 4 -> "روشتتي"; else -> "الإعدادات" },
-                        fontSize = 22.sp, fontWeight = FontWeight.Bold
+            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
+                Text(
+                    "BodyWise", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                IconButton(onClick = { settingsSection = null; tab = if (tab == 5) 0 else 5 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
+                    Icon(
+                        Icons.Default.Settings, "الإعدادات", modifier = Modifier.size(30.dp),
+                        tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                IconButton(onClick = { settingsSection = null; tab = if (tab == 5) 0 else 5 }) {
-                    Icon(Icons.Default.Settings, "الإعدادات", tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             when (tab) {

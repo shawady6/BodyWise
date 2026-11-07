@@ -1,5 +1,6 @@
 package com.shawady.bodywise.ui.home
 
+import com.shawady.bodywise.ui.theme.Status
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,8 +45,6 @@ import com.shawady.bodywise.util.formatNumber
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
-private val red = Color(0xFFD32F2F)
-private val amber = Color(0xFFE08A00)
 
 /** Tab numbers: 1 غذائي، 2 قياساتي، 3 حيوياتي، 4 روشتتي. */
 @Composable
@@ -91,7 +90,7 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
             AppCard {
                 SectionTitle("🔔", "تنبيهات مهمة")
                 alerts.forEach { a ->
-                    Text((if (a.severe) "⚠️ " else "• ") + a.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (a.severe) red else amber)
+                    Text((if (a.severe) "⚠️ " else "• ") + a.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (a.severe) Status.danger() else Status.warning())
                 }
             }
         }
@@ -160,7 +159,7 @@ private fun VitalLine(r: VitalReading) {
         Text(
             "$value ${r.type.unit}" + if (w != null) " ⚠️" else "",
             fontWeight = FontWeight.Bold,
-            color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> red; else -> amber }
+            color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> Status.danger(); else -> Status.warning() }
         )
     }
     Hint("${r.at.toLocalDate()} ${r.at.toLocalTime().format12()}")

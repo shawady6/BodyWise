@@ -1,5 +1,6 @@
 package com.shawady.bodywise.ui.meds
 
+import com.shawady.bodywise.ui.theme.Status
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
@@ -15,6 +16,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -112,9 +119,6 @@ private val weekOrder = listOf(
 )
 private val arabic = Locale("ar")
 private fun DayOfWeek.arabicName(): String = getDisplayName(TextStyle.FULL, arabic)
-private val red = Color(0xFFD32F2F)
-private val amber = Color(0xFFE08A00)
-private val green = Color(0xFF2E7D32)
 
 private fun Medication.doseText(): String = listOf(dose, unit).filter { it.isNotBlank() }.joinToString(" ")
 
@@ -148,7 +152,7 @@ fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
             Tab(selected = sub == 1, onClick = { sub = 1 }, text = { Text("الأدوية") })
             Tab(
                 selected = sub == 2, onClick = { sub = 2 },
-                text = { Text(if (refillList.isNotEmpty()) "تجديد (${refillList.size})" else "تجديد", color = if (refillList.isNotEmpty()) red else Color.Unspecified) }
+                text = { Text(if (refillList.isNotEmpty()) "تجديد (${refillList.size})" else "تجديد", color = if (refillList.isNotEmpty()) Status.danger() else Color.Unspecified) }
             )
         }
         Column(
@@ -166,7 +170,7 @@ fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
     }
 
     if (adding || editing != null) {
-        MedDialog(vm, editing, onDismiss = { adding = false; editing = null }, onSave = { vm.saveMedication(it); adding = false; editing = null })
+        MedEditor(vm, editing, onDismiss = { adding = false; editing = null }, onSave = { vm.saveMedication(it); adding = false; editing = null })
     }
     refilling?.let { med -> RefillDialog(med, onDismiss = { refilling = null }, onSave = { vm.saveMedication(it); refilling = null }) }
 }
@@ -187,12 +191,12 @@ private fun DosesTab(vm: BodyWiseViewModel, now: LocalDateTime) {
 @Composable
 private fun SlotRow(vm: BodyWiseViewModel, slot: DoseSlot, state: SlotState) {
     val (label, color) = when (state) {
-        SlotState.TAKEN -> "✅ اتاخدت" to green
+        SlotState.TAKEN -> "✅ اتاخدت" to Status.success()
         SlotState.SKIPPED -> "⏭ اتخطت" to MaterialTheme.colorScheme.onSurfaceVariant
-        SlotState.SNOOZED -> "⏰ متأجلة" to amber
+        SlotState.SNOOZED -> "⏰ متأجلة" to Status.warning()
         SlotState.UPCOMING -> "قادمة" to MaterialTheme.colorScheme.onSurfaceVariant
-        SlotState.DUE -> "🔔 وقتها دلوقتي" to amber
-        SlotState.MISSED -> "❌ فاتت" to red
+        SlotState.DUE -> "🔔 وقتها دلوقتي" to Status.warning()
+        SlotState.MISSED -> "❌ فاتت" to Status.danger()
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,32 +258,14 @@ private fun MedsTab(vm: BodyWiseViewModel, onAdd: () -> Unit, onEdit: (Medicatio
         Icon(Icons.Default.Add, null)
         Text("  إضافة دواء")
     }
-    vm.medications.forEach { med ->
+    if (vm.medications.isEmpty()) {
         AppCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("💊 ${med.name}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Hint(listOf(med.doseText(), med.instruction.takeIf { it != "لا يهم" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" • "))
-                }
-                IconButton(onClick = { onEdit(med) }) { Icon(Icons.Default.Edit, "تعديل") }
-                IconButton(onClick = { vm.deleteMedication(med) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
-            }
-            Hint("المواعيد: " + med.times.joinToString(" • ") { it.format12() })
-            Hint("الأيام: " + if (med.days.isEmpty()) "كل يوم" else weekOrder.filter { it in med.days }.joinToString("، ") { it.arabicName() })
-            Hint("من ${med.startDate}" + (med.endDate?.let { " إلى $it" } ?: " (بدون نهاية)"))
-            med.packagingText()?.let { Hint(it) }
-            med.stockText()?.let { stock ->
-                val low = med.needsRefill()
-                Text(
-                    "المتبقي: $stock" + if (low) "  — محتاج تجديد ⚠️" else "",
-                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (low) red else MaterialTheme.colorScheme.onSurface
-                )
-            }
-            med.price?.let { Hint("سعر العلبة: ${formatNumber(it)} ج.م") }
-            if (med.notes.isNotBlank()) Hint("ملاحظات: ${med.notes}")
-            med.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 110) }
+            Text("💊", fontSize = 40.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text("لسه ما أضفتش أي دواء", fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Hint("أضف دواءك الأول وهنفكّرك بمواعيده.")
         }
     }
+    vm.medications.forEach { med -> MedCard(vm, med, onEdit) }
     OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("⚙️ إعدادات التنبيهات والنغمة") }
 }
 
@@ -293,10 +279,10 @@ private fun RefillTab(vm: BodyWiseViewModel, refillList: List<Medication>, onRef
         refillList.forEach { med ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(med.name, fontWeight = FontWeight.Bold)
-                med.stockText()?.let { Text("المتبقي: $it", color = red, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                med.stockText()?.let { Text("المتبقي: $it", color = Status.danger(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
                 val pct = med.percentLeft()
                 if (pct != null) {
-                    LinearProgressIndicator(progress = { pct / 100f }, color = red, modifier = Modifier.fillMaxWidth())
+                    LinearProgressIndicator(progress = { pct / 100f }, color = Status.danger(), modifier = Modifier.fillMaxWidth())
                     Hint("باقي $pct% من الكمية")
                 }
                 med.price?.let { Hint("آخر سعر للعلبة: ${formatNumber(it)} ج.م") }
@@ -350,215 +336,59 @@ private fun RefillDialog(med: Medication, onDismiss: () -> Unit, onSave: (Medica
     )
 }
 
-// ---------------------------------------------------------------- add / edit dialog
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MedDialog(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit, onSave: (Medication) -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf(initial?.name ?: "") }
-    var dose by remember { mutableStateOf(initial?.dose ?: "1") }
-    var unit by remember { mutableStateOf(initial?.unit?.ifBlank { null } ?: MED_UNITS.first()) }
-    var times by remember { mutableStateOf(initial?.times ?: listOf(LocalTime.of(8, 0))) }
-    var days by remember { mutableStateOf(initial?.days ?: emptySet()) }
-    var start by remember { mutableStateOf(initial?.startDate ?: LocalDate.now()) }
-    var end by remember { mutableStateOf(initial?.endDate) }
-    var instruction by remember { mutableStateOf(initial?.instruction?.ifBlank { null } ?: MED_INSTRUCTIONS.first()) }
-    var notes by remember { mutableStateOf(initial?.notes ?: "") }
-    var price by remember { mutableStateOf(initial?.price?.let { formatNumber(it) } ?: "") }
-    var strips by remember { mutableStateOf(initial?.stripsPerBox?.toString() ?: "") }
-    var perStrip by remember { mutableStateOf(initial?.unitsPerStrip?.toString() ?: "") }
-    var perBoxText by remember { mutableStateOf(if (initial?.stripsPerBox == null) initial?.unitsPerBox?.let { formatNumber(it) } ?: "" else "") }
-    val initialBoxes = remember {
-        val per = initial?.unitsPerBox
-        val left = initial?.remaining
-        if (per != null && per > 0 && left != null) formatNumber(Math.round(left / per * 100) / 100.0) else ""
-    }
-    var boxes by remember { mutableStateOf(initialBoxes) }
-    var photo by remember { mutableStateOf(initial?.photo) }
-    var newPhoto by remember { mutableStateOf<String?>(null) }
-    var pendingCamera by remember { mutableStateOf<File?>(null) }
-    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
-    var reading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var timeEditIndex by remember { mutableStateOf<Int?>(null) }
-    var datePicking by remember { mutableStateOf<String?>(null) }
-
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val file = pendingCamera
-        pendingCamera = null
-        if (ok && file != null && file.exists()) {
-            vm.importMedPhoto({ file.inputStream() }) { saved ->
-                file.delete()
-                if (saved != null) {
-                    newPhoto?.let { vm.deleteStrayFile(it) }
-                    newPhoto = saved
-                    photo = saved
-                    scope.launch {
-                        reading = true
-                        suggestions = recognizeDrugNames(vm.medPhotoFile(saved).absolutePath)
-                        reading = false
-                        if (suggestions.isEmpty()) vm.toast = "ما قدرتش أقرا اسم واضح، اكتبه بإيدك"
-                    }
+private fun MedCard(vm: BodyWiseViewModel, med: Medication, onEdit: (Medication) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    AppCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(med.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(
+                    listOf(med.doseText(), med.instruction.takeIf { it != "لا يهم" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" • "),
+                    fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "خيارات") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("تعديل") }, onClick = { menu = false; onEdit(med) })
+                    DropdownMenuItem(text = { Text("حذف") }, onClick = { menu = false; vm.deleteMedication(med) })
                 }
             }
         }
-    }
-    fun dismiss() { newPhoto?.let { vm.deleteStrayFile(it) }; onDismiss() }
-    val isStrip = unit in STRIP_UNITS
-
-    AlertDialog(
-        onDismissRequest = { dismiss() },
-        title = { Text(if (initial == null) "دواء جديد" else "تعديل الدواء") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 120) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        runCatching {
-                            val file = File(context.cacheDir, "med_capture_${System.currentTimeMillis()}.jpg")
-                            pendingCamera = file
-                            camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
-                        }.onFailure { vm.toast = "تعذر فتح الكاميرا" }
-                    }) {
-                        Icon(Icons.Default.CameraAlt, null)
-                        Text("  ${if (photo == null) "صوّر العلبة" else "صوّر تاني"}")
-                    }
-                    if (photo != null) TextButton(onClick = { newPhoto?.let { vm.deleteStrayFile(it) }; newPhoto = null; photo = null; suggestions = emptyList() }) { Text("شيل الصورة") }
-                }
-                if (reading) Hint("بقرا الاسم من الصورة...")
-                if (suggestions.isNotEmpty()) {
-                    Hint("الاسم اللي قريته من الصورة — اختار الصح:")
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        suggestions.forEach { s -> FilterChip(selected = name == s, onClick = { name = s }, label = { Text(s) }) }
-                    }
-                }
-                OutlinedTextField(name, { name = it }, label = { Text("اسم الدواء") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                NumberField("الجرعة (الكمية في المرة)", dose, { dose = it })
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    MED_UNITS.forEach { u -> FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u) }) }
-                }
-
-                Text("عدد المرات في اليوم", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    (1..4).forEach { n ->
-                        FilterChip(selected = times.size == n, onClick = { times = suggestTimes(n, times) }, label = { Text("$n") })
-                    }
-                }
-                times.forEachIndexed { i, t ->
-                    OutlinedButton(onClick = { timeEditIndex = i }, modifier = Modifier.fillMaxWidth()) { Text("المرة ${i + 1}:  ${t.format12()}") }
-                }
-
-                Text("الأيام", fontWeight = FontWeight.SemiBold)
-                FilterChip(selected = days.isEmpty(), onClick = { days = emptySet() }, label = { Text("كل يوم") })
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    weekOrder.forEach { d ->
-                        FilterChip(selected = d in days, onClick = { days = if (d in days) days - d else days + d }, label = { Text(d.getDisplayName(TextStyle.SHORT, arabic)) })
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { datePicking = "start" }, modifier = Modifier.weight(1f)) { Text("من $start") }
-                    OutlinedButton(onClick = { datePicking = "end" }, modifier = Modifier.weight(1f)) { Text(end?.let { "إلى $it" } ?: "بدون نهاية") }
-                }
-                if (end != null) TextButton(onClick = { end = null }) { Text("إلغاء تاريخ النهاية") }
-                Text("التعليمات", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    MED_INSTRUCTIONS.forEach { s -> FilterChip(selected = instruction == s, onClick = { instruction = s }, label = { Text(s) }) }
-                }
-
-                Text("العلب والكمية", fontWeight = FontWeight.SemiBold)
-                if (isStrip) {
-                    NumberField("عدد الشرايط في العلبة", strips, { strips = it })
-                    NumberField("عدد ${unit}ات في الشريط", perStrip, { perStrip = it })
-                } else {
-                    NumberField("عدد ال$unit في العلبة/العبوة", perBoxText, { perBoxText = it })
-                }
-                NumberField("عدد العلب اللي معاك دلوقتي", boxes, { boxes = it })
-                NumberField("سعر العلبة (اختياري)", price, { price = it })
-                OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات (اختياري)") }, modifier = Modifier.fillMaxWidth())
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val amount = parseDecimal(dose)
-                val stripsN = strips.trim().toIntOrNull()
-                val perStripN = perStrip.trim().toIntOrNull()
-                val perBox: Double? = if (isStrip) {
-                    if (stripsN != null && perStripN != null) (stripsN * perStripN).toDouble() else null
-                } else parseDecimal(perBoxText)
-                val boxesN = if (boxes.isBlank()) null else parseDecimal(boxes)
-                val priceN = if (price.isBlank()) null else parseDecimal(price)
-                val problem = when {
-                    name.isBlank() -> "اكتب اسم الدواء"
-                    amount == null || amount <= 0 -> "اكتب الجرعة (رقم أكبر من صفر)"
-                    end != null && end!!.isBefore(start) -> "تاريخ النهاية قبل البداية"
-                    isStrip && (strips.isNotBlank() || perStrip.isNotBlank()) && perBox == null -> "اكتب عدد الشرايط وعدد ${unit}ات الشريط"
-                    boxes.isNotBlank() && boxesN == null -> "عدد العلب مش رقم صحيح"
-                    boxesN != null && (perBox == null || perBox <= 0) -> "اكتب حجم العلبة (شرايط × أقراص) علشان أحسب الكمية"
-                    price.isNotBlank() && priceN == null -> "السعر مش رقم صحيح"
-                    else -> null
-                }
-                if (problem != null) { error = problem; return@TextButton }
-
-                var remaining = initial?.remaining
-                var full = initial?.fullQuantity
-                if (boxesN != null && perBox != null && boxes != initialBoxes) {
-                    val newRemaining = boxesN * perBox
-                    remaining = newRemaining
-                    full = if (full == null || newRemaining > full) newRemaining else full
-                }
-                newPhoto = null
-                onSave(
-                    Medication(
-                        id = initial?.id ?: UUID.randomUUID().toString(),
-                        name = name.trim(), dose = formatNumber(amount!!), unit = unit,
-                        times = times.sorted(), days = days, startDate = start, endDate = end,
-                        instruction = instruction, notes = notes.trim(), photo = photo, remaining = remaining,
-                        createdAt = initial?.createdAt ?: LocalDateTime.now(),
-                        stripsPerBox = if (isStrip) stripsN else null,
-                        unitsPerStrip = if (isStrip) perStripN else null,
-                        unitsPerBox = perBox,
-                        fullQuantity = full,
-                        price = priceN
-                    )
-                )
-            }) { Text("حفظ") }
-        },
-        dismissButton = { TextButton(onClick = { dismiss() }) { Text("إلغاء") } }
-    )
-
-    timeEditIndex?.let { index ->
-        val current = times.getOrNull(index) ?: LocalTime.of(8, 0)
-        val state = rememberTimePickerState(initialHour = current.hour, initialMinute = current.minute, is24Hour = false)
-        AlertDialog(
-            onDismissRequest = { timeEditIndex = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    times = times.mapIndexed { j, t -> if (j == index) LocalTime.of(state.hour, state.minute) else t }
-                    timeEditIndex = null
-                }) { Text("تم") }
-            },
-            dismissButton = { TextButton(onClick = { timeEditIndex = null }) { Text("إلغاء") } },
-            text = { TimePicker(state = state) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            med.times.forEach { TimeChip(it.format12()) }
+        }
+        Hint(
+            (if (med.days.isEmpty()) "كل يوم" else weekOrder.filter { it in med.days }.joinToString("، ") { it.arabicName() }) +
+                " • " + (med.endDate?.let { "لحد $it" } ?: "مستمر")
         )
+        val left = med.remaining
+        if (left != null) {
+            val low = med.needsRefill()
+            val pct = med.percentLeft()
+            if (pct != null) {
+                LinearProgressIndicator(
+                    progress = { pct / 100f },
+                    color = if (low) Status.danger() else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Text(
+                "باقي ${med.stockText().orEmpty()}" + if (low) "  — محتاج تجديد ⚠️" else "",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (low) Status.danger() else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        med.price?.let { Hint("سعر العلبة: ${formatNumber(it)} ج.م") }
+        if (med.notes.isNotBlank()) Hint("ملاحظات: ${med.notes}")
+        med.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 90) }
     }
-    datePicking?.let { which ->
-        val base = if (which == "start") start else (end ?: start)
-        val state = rememberDatePickerState(initialSelectedDateMillis = base.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
-        DatePickerDialog(
-            onDismissRequest = { datePicking = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let {
-                        val picked = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
-                        if (which == "start") start = picked else end = picked
-                    }
-                    datePicking = null
-                }) { Text("تم") }
-            },
-            dismissButton = { TextButton(onClick = { datePicking = null }) { Text("إلغاء") } }
-        ) { DatePicker(state = state) }
+}
+
+@Composable
+private fun TimeChip(text: String) {
+    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }

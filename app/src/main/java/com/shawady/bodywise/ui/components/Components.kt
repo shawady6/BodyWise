@@ -93,7 +93,7 @@ fun SmallStat(title: String, value: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun Hint(text: String, modifier: Modifier = Modifier) {
-    Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
+    Text(text, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
 }
 
 @Composable

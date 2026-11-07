@@ -1,5 +1,6 @@
 package com.shawady.bodywise.ui.vitals
 
+import com.shawady.bodywise.ui.theme.Status
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,7 +96,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
                 }
                 Hint("${latest.at.toLocalDate()}  ${latest.at.toLocalTime().format12()}" + if (latest.tag.isNotBlank()) "  •  ${latest.tag}" else "")
                 vitalWarning(latest)?.let { w ->
-                    Text(w.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (w.severe) Color(0xFFD32F2F) else Color(0xFFE08A00))
+                    Text(w.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (w.severe) Status.danger() else Status.warning())
                 }
             }
             Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
@@ -123,7 +124,7 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
                         Text(
                             "${r.display()} ${type.unit}" + if (w != null) (if (w.severe) "  ⚠️ خطر" else "  ▲▼ خارج المعدل") else "",
                             fontWeight = FontWeight.SemiBold,
-                            color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> Color(0xFFD32F2F); else -> Color(0xFFE08A00) }
+                            color = when { w == null -> MaterialTheme.colorScheme.onSurface; w.severe -> Status.danger(); else -> Status.warning() }
                         )
                         Hint("${r.at.toLocalDate()}  ${r.at.toLocalTime().format12()}" + (if (r.tag.isNotBlank()) "  •  ${r.tag}" else "") + (if (r.note.isNotBlank()) "  •  ${r.note}" else ""))
                     }
