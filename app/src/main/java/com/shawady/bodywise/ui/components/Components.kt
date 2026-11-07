@@ -1,5 +1,6 @@
 package com.shawady.bodywise.ui.components
 
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
@@ -206,6 +207,7 @@ fun PersonHeader(text: String, modifier: Modifier = Modifier) {
 }
 
 /** "الدواء لـ / الموعد لـ" chooser: أنا first, then the people. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PersonPicker(label: String, people: List<com.shawady.bodywise.data.Person>, selectedId: String?, onSelect: (String?) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
