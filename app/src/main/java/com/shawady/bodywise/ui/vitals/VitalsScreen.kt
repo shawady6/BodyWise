@@ -67,9 +67,7 @@ private fun VitalReading.display(): String = when (type) {
 }
 
 @Composable
-fun VitalsScreen(vm: BodyWiseViewModel) {
-    var typeIndex by rememberSaveable { mutableStateOf(0) }
-    val type = VitalType.entries[typeIndex]
+fun VitalsScreen(vm: BodyWiseViewModel, type: VitalType) {
     var editing by remember { mutableStateOf<VitalReading?>(null) }
     var adding by remember { mutableStateOf(false) }
     val readings = vm.vitals.filter { it.type == type }
@@ -78,12 +76,6 @@ fun VitalsScreen(vm: BodyWiseViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            VitalType.entries.forEachIndexed { i, t ->
-                FilterChip(selected = i == typeIndex, onClick = { typeIndex = i }, label = { Text("${t.emoji} ${t.label}") })
-            }
-        }
-
         AppCard {
             val latest = readings.firstOrNull()
             Text("آخر قراءة", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

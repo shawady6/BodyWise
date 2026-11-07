@@ -62,11 +62,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shawady.bodywise.security.AppLock
 import com.shawady.bodywise.ui.components.Hint
 import com.shawady.bodywise.ui.food.FoodScreen
-import com.shawady.bodywise.ui.progress.ProgressScreen
+import com.shawady.bodywise.ui.health.HealthScreen
 import com.shawady.bodywise.ui.settings.OnboardingScreen
 import com.shawady.bodywise.ui.settings.SettingsScreen
 import com.shawady.bodywise.ui.theme.BodyWiseTheme
-import com.shawady.bodywise.ui.vitals.VitalsScreen
 import com.shawady.bodywise.ui.home.HomeScreen
 import com.shawady.bodywise.ui.meds.MedsScreen
 import com.shawady.bodywise.update.UpdateViewModel
@@ -153,6 +152,7 @@ private fun LockScreen(message: String, onUnlock: () -> Unit) {
 @Composable
 private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLock: AppLock) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var healthPage by rememberSaveable { mutableIntStateOf(0) }
     var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
     var requests by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
@@ -176,9 +176,8 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
             NavigationBar {
                 NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية", fontSize = 11.sp, maxLines = 1) })
                 NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي", fontSize = 11.sp, maxLines = 1) })
-                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, null) }, label = { Text("قياساتي", fontSize = 11.sp, maxLines = 1) })
-                NavigationBarItem(tab == 3, { tab = 3 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("حيوياتي", fontSize = 11.sp, maxLines = 1) })
-                NavigationBarItem(tab == 4, { tab = 4 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("صحتي", fontSize = 11.sp, maxLines = 1) })
+                NavigationBarItem(tab == 3, { tab = 3 }, icon = { Icon(Icons.Default.Medication, null) }, label = { Text("روشتتي", fontSize = 11.sp, maxLines = 1) })
             }
         }
     ) { padding ->
@@ -188,19 +187,26 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                     "BodyWise", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.align(Alignment.Center)
                 )
-                IconButton(onClick = { settingsSection = null; tab = if (tab == 5) 0 else 5 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
+                IconButton(onClick = { settingsSection = null; tab = if (tab == 4) 0 else 4 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
                     Icon(
                         Icons.Default.Settings, "الإعدادات", modifier = Modifier.size(30.dp),
-                        tint = if (tab == 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (tab == 4) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             when (tab) {
-                0 -> HomeScreen(vm, updateVm) { tab = it }
+                // الرئيسية بتنادي بالأرقام القديمة: 2 = الوزن، 3 = الحيويات، 4 = روشتتي
+                0 -> HomeScreen(vm, updateVm) { target ->
+                    when (target) {
+                        2 -> { healthPage = 0; tab = 2 }
+                        3 -> { healthPage = 1; tab = 2 }
+                        4 -> tab = 3
+                        else -> tab = target
+                    }
+                }
                 1 -> FoodScreen(vm)
-                2 -> ProgressScreen(vm)
-                3 -> VitalsScreen(vm)
-                4 -> MedsScreen(vm, onOpenSettings = { requests++; settingsSection = "alerts#$requests"; tab = 5 })
+                2 -> HealthScreen(vm, healthPage) { healthPage = it }
+                3 -> MedsScreen(vm, onOpenSettings = { requests++; settingsSection = "alerts#$requests"; tab = 4 })
                 else -> SettingsScreen(vm, updateVm, appLock.isAvailable(), settingsSection)
             }
         }
