@@ -146,6 +146,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
             SettingsSection("reminders", "⏰", "التذكيرات", openId, { openId = it }) {
                 SwitchRow("تذكير المياه", "كل 3 ساعات من 9 صباحًا لـ 9 مساءً، لو لسه ما وصلتش للهدف", settings.waterReminders) { toggleReminder("water", it) }
                 SwitchRow("تذكير قياسات الأسبوع", "الجمعة 6 مساءً لو ما سجلتش قياسات الأسبوع ده", settings.weeklyReminder) { toggleReminder("weekly", it) }
+                SwitchRow("تنبيهات يومية ذكية", "10 صباحًا: دواء قرّب يخلص، أو قياس ضغط/سكر/نبض ما اتسجلش من فترة", settings.dailyChecks) { vm.setDailyChecks(it) }
             }
         }
         item {

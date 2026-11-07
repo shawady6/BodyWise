@@ -1,3 +1,4 @@
 <resources>
     <string name="widget_description">سجّل أكواب المياه بضغطة من الشاشة الرئيسية</string>
+    <string name="med_widget_description">الجرعات القادمة اليوم مع زر "أخدتها"</string>
 </resources>

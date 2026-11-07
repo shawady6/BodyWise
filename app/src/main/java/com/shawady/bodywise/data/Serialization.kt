@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 5
+    const val VERSION = 6
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -202,6 +202,59 @@ object SnapshotJson {
         )
     }
 
+    fun doctorsToJson(list: List<Doctor>): JSONArray {
+        val array = JSONArray()
+        list.forEach { d ->
+            array.put(JSONObject().put("id", d.id).put("name", d.name).put("specialty", d.specialty).put("phone", d.phone)
+                .put("clinic", d.clinic).put("address", d.address).put("notes", d.notes))
+        }
+        return array
+    }
+
+    fun doctorsFromJson(array: JSONArray): List<Doctor> = List(array.length()) { i ->
+        val o = array.getJSONObject(i)
+        Doctor(o.getString("id"), o.getString("name"), o.optString("specialty"), o.optString("phone"),
+            o.optString("clinic"), o.optString("address"), o.optString("notes"))
+    }
+
+    fun appointmentsToJson(list: List<Appointment>): JSONArray {
+        val array = JSONArray()
+        list.forEach { a ->
+            array.put(JSONObject().put("id", a.id).put("doctorId", a.doctorId ?: "").put("doctorName", a.doctorName)
+                .put("at", a.at.toString()).put("reason", a.reason).put("done", a.done).put("outcome", a.outcome))
+        }
+        return array
+    }
+
+    fun appointmentsFromJson(array: JSONArray): List<Appointment> = List(array.length()) { i ->
+        val o = array.getJSONObject(i)
+        Appointment(o.getString("id"), o.optString("doctorId").ifBlank { null }, o.optString("doctorName"),
+            java.time.LocalDateTime.parse(o.getString("at")), o.optString("reason"), o.optBoolean("done", false), o.optString("outcome"))
+    }
+
+    fun profileToJson(p: MedicalProfile): JSONObject = JSONObject().put("bloodType", p.bloodType).put("allergies", p.allergies)
+        .put("conditions", p.conditions).put("emergencyName", p.emergencyName).put("emergencyPhone", p.emergencyPhone).put("notes", p.notes)
+
+    fun profileFromJson(o: JSONObject): MedicalProfile = MedicalProfile(
+        o.optString("bloodType"), o.optString("allergies"), o.optString("conditions"),
+        o.optString("emergencyName"), o.optString("emergencyPhone"), o.optString("notes")
+    )
+
+    fun docsToJson(list: List<MedicalDoc>): JSONArray {
+        val array = JSONArray()
+        list.forEach { d ->
+            array.put(JSONObject().put("id", d.id).put("date", d.date.toString()).put("kind", d.kind).put("title", d.title)
+                .put("doctorName", d.doctorName).put("photo", d.photo ?: ""))
+        }
+        return array
+    }
+
+    fun docsFromJson(array: JSONArray): List<MedicalDoc> = List(array.length()) { i ->
+        val o = array.getJSONObject(i)
+        MedicalDoc(o.getString("id"), LocalDate.parse(o.getString("date")), o.optString("kind", "أخرى"), o.optString("title"),
+            o.optString("doctorName"), o.optString("photo").ifBlank { null })
+    }
+
     fun toBackup(snapshot: Snapshot, exportedAt: LocalDate): JSONObject = JSONObject()
         .put("format", FORMAT)
         .put("version", VERSION)
@@ -214,6 +267,10 @@ object SnapshotJson {
         .put("vitals", vitalsToJson(snapshot.vitals))
         .put("medications", medsToJson(snapshot.medications))
         .put("doseLogs", logsToJson(snapshot.doseLogs))
+        .put("doctors", doctorsToJson(snapshot.doctors))
+        .put("appointments", appointmentsToJson(snapshot.appointments))
+        .put("medProfile", profileToJson(snapshot.medProfile))
+        .put("medDocs", docsToJson(snapshot.medDocs))
         .put("settings", JSONObject()
             .put("waterGoal", snapshot.waterGoal)
             .put("heightCm", snapshot.heightCm?.let { formatNumber(it) } ?: "")
@@ -233,7 +290,11 @@ object SnapshotJson {
             targetWeight = parseDecimal(json.optJSONObject("settings")?.optString("targetWeight").orEmpty()),
             vitals = json.optJSONArray("vitals")?.let { vitalsFromJson(it) } ?: emptyList(),
             medications = json.optJSONArray("medications")?.let { medsFromJson(it) } ?: emptyList(),
-            doseLogs = json.optJSONArray("doseLogs")?.let { logsFromJson(it) } ?: emptyList()
+            doseLogs = json.optJSONArray("doseLogs")?.let { logsFromJson(it) } ?: emptyList(),
+            doctors = json.optJSONArray("doctors")?.let { doctorsFromJson(it) } ?: emptyList(),
+            appointments = json.optJSONArray("appointments")?.let { appointmentsFromJson(it) } ?: emptyList(),
+            medProfile = json.optJSONObject("medProfile")?.let { profileFromJson(it) } ?: MedicalProfile(),
+            medDocs = json.optJSONArray("medDocs")?.let { docsFromJson(it) } ?: emptyList()
         )
     }
 }

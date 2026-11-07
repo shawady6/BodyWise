@@ -1,0 +1,100 @@
+package com.shawady.bodywise.data
+
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+
+class HealthTest {
+    private val appt = Appointment("a", "d", "د. أحمد", LocalDateTime.of(2026, 11, 10, 17, 0), "متابعة")
+
+    @Test fun remindersEveningBeforeAndTwoHours() {
+        val r = appointmentReminders(appt, LocalDateTime.of(2026, 11, 8, 9, 0))
+        assertEquals(2, r.size)
+        assertEquals(LocalDateTime.of(2026, 11, 9, 20, 0), r[0].second)
+        assertEquals(LocalDateTime.of(2026, 11, 10, 15, 0), r[1].second)
+    }
+
+    @Test fun remindersSkipPastAndDone() {
+        assertEquals(1, appointmentReminders(appt, LocalDateTime.of(2026, 11, 9, 21, 0)).size)
+        assertTrue(appointmentReminders(appt, LocalDateTime.of(2026, 11, 10, 16, 0)).isEmpty())
+        assertTrue(appointmentReminders(appt.copy(done = true), LocalDateTime.of(2026, 11, 8, 9, 0)).isEmpty())
+    }
+
+    @Test fun upcomingAndOverdue() {
+        val now = LocalDateTime.of(2026, 11, 10, 17, 30)
+        assertTrue(upcomingAppointments(listOf(appt), now).isNotEmpty()) // within the last hour still counts as upcoming
+        assertTrue(overdueAppointments(listOf(appt), now.plusHours(2)).isNotEmpty())
+        assertTrue(overdueAppointments(listOf(appt.copy(done = true)), now.plusHours(2)).isEmpty())
+    }
+
+    @Test fun phoneNumbers() {
+        assertEquals("201012345678", whatsappNumber("0101 234 5678"))
+        assertEquals("201012345678", whatsappNumber("+20 101 234 5678"))
+        assertEquals("201012345678", whatsappNumber("00201012345678"))
+        assertEquals("+201012345678", dialNumber("+20 101-234-5678"))
+    }
+
+    private fun med(remaining: Double?, times: Int, days: Set<java.time.DayOfWeek> = emptySet(), dose: String = "1") = Medication(
+        "m", "دواء", dose, "قرص", List(times) { LocalTime.of(8 + it, 0) }, days, LocalDate.of(2026, 11, 1), null,
+        "", "", null, remaining, LocalDateTime.of(2026, 11, 1, 0, 0)
+    )
+
+    @Test fun daysOfStock() {
+        assertEquals(10, daysOfStockLeft(med(20.0, 2)))
+        assertEquals(5, daysOfStockLeft(med(10.0, 2)))
+        assertNull(daysOfStockLeft(med(null, 2)))
+        assertNull(daysOfStockLeft(med(10.0, 0)))
+        // 3 days a week: 3 doses per week -> 6 units last 14 days
+        assertEquals(14, daysOfStockLeft(med(6.0, 1, setOf(java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.WEDNESDAY, java.time.DayOfWeek.FRIDAY))))
+    }
+
+    private fun bp(day: Int) = VitalReading("v$day", VitalType.BP, LocalDateTime.of(2026, 11, day, 9, 0), 120.0, 80.0)
+
+    @Test fun overdueVitalsUsesPersonalHabit() {
+        val daily = listOf(bp(1), bp(2), bp(3), bp(4))
+        assertTrue(overdueVitals(daily, LocalDateTime.of(2026, 11, 5, 10, 0)).isEmpty())
+        assertEquals(4L, overdueVitals(daily, LocalDateTime.of(2026, 11, 8, 10, 0))[VitalType.BP])
+        // weekly habit is not nagged after three days
+        assertTrue(overdueVitals(listOf(bp(1), bp(8), bp(15)), LocalDateTime.of(2026, 11, 18, 10, 0)).isEmpty())
+        // fewer than three readings: no reminder
+        assertTrue(overdueVitals(listOf(bp(1), bp(2)), LocalDateTime.of(2026, 11, 30, 10, 0)).isEmpty())
+    }
+
+    @Test fun serializationRoundTrip() {
+        val doc = Doctor("d", "د. أحمد", "باطنة", "0101", "عيادة", "شارع", "السبت")
+        assertEquals(listOf(doc), SnapshotJson.doctorsFromJson(JSONArray(SnapshotJson.doctorsToJson(listOf(doc)).toString())))
+        val a = appt.copy(done = true, outcome = "تحاليل")
+        assertEquals(listOf(a), SnapshotJson.appointmentsFromJson(JSONArray(SnapshotJson.appointmentsToJson(listOf(a)).toString())))
+        val noDoctor = appt.copy(doctorId = null)
+        assertNull(SnapshotJson.appointmentsFromJson(SnapshotJson.appointmentsToJson(listOf(noDoctor))).first().doctorId)
+        val p = MedicalProfile("O+", "بنسلين", "ضغط", "ماما", "0102", "")
+        assertEquals(p, SnapshotJson.profileFromJson(JSONObject(SnapshotJson.profileToJson(p).toString())))
+        assertTrue(MedicalProfile().isEmpty())
+        val md = MedicalDoc("x", LocalDate.of(2026, 11, 1), "تحليل", "سكر", "د. أحمد", "med_1.jpg")
+        assertEquals(listOf(md), SnapshotJson.docsFromJson(JSONArray(SnapshotJson.docsToJson(listOf(md)).toString())))
+    }
+
+    @Test fun backupKeepsHealthData() {
+        val snap = Snapshot(doctors = listOf(Doctor("d", "x")), appointments = listOf(appt), medProfile = MedicalProfile("A+"), medDocs = emptyList())
+        val back = SnapshotJson.fromBackup(JSONObject(SnapshotJson.toBackup(snap, LocalDate.of(2026, 11, 8)).toString()))
+        assertEquals(snap.doctors, back.doctors)
+        assertEquals(snap.appointments, back.appointments)
+        assertEquals("A+", back.medProfile.bloodType)
+        assertFalse(back.appointments.first().done)
+    }
+
+    @Test fun oldBackupsStillLoad() {
+        val snap = Snapshot()
+        val json = SnapshotJson.toBackup(snap, LocalDate.of(2026, 11, 8)).put("version", 5)
+        json.remove("doctors"); json.remove("appointments"); json.remove("medProfile"); json.remove("medDocs")
+        val back = SnapshotJson.fromBackup(json)
+        assertTrue(back.doctors.isEmpty() && back.medProfile.isEmpty())
+    }
+}

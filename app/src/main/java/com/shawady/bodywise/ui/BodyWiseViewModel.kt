@@ -48,6 +48,12 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     val medications = mutableStateListOf<com.shawady.bodywise.data.Medication>()
     val doseLogs = mutableStateMapOf<String, com.shawady.bodywise.data.DoseLog>()
     val vitals = mutableStateListOf<com.shawady.bodywise.data.VitalReading>()
+    private val healthStore = com.shawady.bodywise.data.HealthStore(app)
+    val doctors = mutableStateListOf<com.shawady.bodywise.data.Doctor>()
+    val appointments = mutableStateListOf<com.shawady.bodywise.data.Appointment>()
+    val medDocs = mutableStateListOf<com.shawady.bodywise.data.MedicalDoc>()
+    var medProfile by mutableStateOf(com.shawady.bodywise.data.MedicalProfile())
+        private set
     var waterGoal by mutableIntStateOf(8)
         private set
     var heightCm by mutableStateOf<Double?>(null)
@@ -74,7 +80,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         apply(store.load())
         medStore.prune(LocalDate.now().minusDays(120))
         reloadMeds()
+        reloadHealth()
         com.shawady.bodywise.notify.MedAlarms.rescheduleAll(app)
+        com.shawady.bodywise.notify.ApptAlarms.ensureChannel(app)
+        com.shawady.bodywise.notify.ApptAlarms.rescheduleAll(app)
+        Reminders.setDaily(app, settings.dailyChecks)
         cleanOrphanPhotos()
     }
 
@@ -93,7 +103,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     private fun snapshot() = Snapshot(
         meals.toMap(), water.toMap(), measurements.toList(), photos.toList(), waterGoal,
         notes.toMap(), heightCm, targetWeight, vitals.toList(),
-        medStore.loadMeds(), medStore.loadLogs().values.toList()
+        medStore.loadMeds(), medStore.loadLogs().values.toList(),
+        healthStore.loadDoctors(), healthStore.loadAppointments(), healthStore.loadProfile(), healthStore.loadDocs()
     )
 
     private fun persist() = store.save(snapshot())
@@ -225,6 +236,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         medications.clear(); medications.addAll(meds)
         val logs = medStore.loadLogs()
         doseLogs.clear(); doseLogs.putAll(logs)
+        com.shawady.bodywise.widget.MedWidgetProvider.refresh(getApplication())
     }
 
     private fun medsChanged() {
@@ -272,6 +284,61 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
 
     fun medPhotoFile(name: String): File = File(store.photosDir, name)
     fun deleteStrayFile(name: String) { File(store.photosDir, name).delete() }
+
+    // ---- Doctors, appointments, medical file ----
+    fun reloadHealth() {
+        doctors.clear(); doctors.addAll(healthStore.loadDoctors().sortedBy { it.name })
+        appointments.clear(); appointments.addAll(healthStore.loadAppointments().sortedBy { it.at })
+        medDocs.clear(); medDocs.addAll(healthStore.loadDocs().sortedByDescending { it.date })
+        medProfile = healthStore.loadProfile()
+    }
+
+    private fun apptsChanged() {
+        reloadHealth()
+        com.shawady.bodywise.notify.ApptAlarms.rescheduleAll(getApplication())
+    }
+
+    fun saveDoctor(d: com.shawady.bodywise.data.Doctor) {
+        healthStore.upsertDoctor(d)
+        reloadHealth()
+    }
+
+    fun deleteDoctor(d: com.shawady.bodywise.data.Doctor) {
+        healthStore.deleteDoctor(d.id)
+        reloadHealth()
+        offerUndo(UndoRequest("اتحذف الدكتور ${d.name}", undo = { healthStore.upsertDoctor(d); reloadHealth() }))
+    }
+
+    fun saveAppointment(a: com.shawady.bodywise.data.Appointment) {
+        healthStore.upsertAppointment(a)
+        apptsChanged()
+    }
+
+    fun deleteAppointment(a: com.shawady.bodywise.data.Appointment) {
+        healthStore.deleteAppointment(a.id)
+        apptsChanged()
+        offerUndo(UndoRequest("اتحذف الموعد", undo = { healthStore.upsertAppointment(a); apptsChanged() }))
+    }
+
+    fun saveProfile(p: com.shawady.bodywise.data.MedicalProfile) {
+        healthStore.saveProfile(p)
+        medProfile = p
+    }
+
+    fun saveDoc(d: com.shawady.bodywise.data.MedicalDoc) {
+        val old = medDocs.firstOrNull { it.id == d.id }
+        healthStore.upsertDoc(d)
+        if (old?.photo != null && old.photo != d.photo) File(store.photosDir, old.photo).delete()
+        reloadHealth()
+    }
+
+    fun deleteDoc(d: com.shawady.bodywise.data.MedicalDoc) {
+        healthStore.deleteDoc(d.id)
+        reloadHealth()
+        offerUndo(UndoRequest("اتحذف المستند ${d.title}",
+            undo = { healthStore.upsertDoc(d); reloadHealth() },
+            commit = { d.photo?.let { File(store.photosDir, it).delete() } }))
+    }
 
     // ---- Vitals ----
     fun saveVital(reading: com.shawady.bodywise.data.VitalReading) {
@@ -375,11 +442,13 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
             result.onSuccess { restored ->
                 undoRequest?.commit?.invoke()
                 undoRequest = null
-                val oldFiles = photos.map { it.file } + medications.mapNotNull { it.photo }
+                val oldFiles = photos.map { it.file } + medications.mapNotNull { it.photo } + medDocs.mapNotNull { it.photo }
                 apply(restored)
                 persist()
                 medStore.replaceAll(restored.medications, restored.doseLogs)
                 medsChanged()
+                healthStore.replaceAll(restored.doctors, restored.appointments, restored.medProfile, restored.medDocs)
+                apptsChanged()
                 oldFiles.forEach { File(store.photosDir, it).delete() }
                 WaterWidgetProvider.refresh(context)
                 backupMessage = "تمت استعادة البيانات و${restored.photos.size} صورة بنجاح."
@@ -401,6 +470,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     fun setAppLock(enabled: Boolean) = update { it.copy(appLock = enabled) }
 
     fun setUpdateNotices(enabled: Boolean) = update { it.copy(updateNotices = enabled) }
+
+    fun setDailyChecks(enabled: Boolean) {
+        update { it.copy(dailyChecks = enabled) }
+        Reminders.setDaily(getApplication(), enabled)
+    }
 
     fun setMedTone(uri: String?) {
         update { it.copy(medTone = uri) }

@@ -16,6 +16,9 @@ import androidx.work.WorkerParameters
 import com.shawady.bodywise.MainActivity
 import com.shawady.bodywise.R
 import com.shawady.bodywise.data.BodyWiseStore
+import com.shawady.bodywise.data.RUNOUT_WARN_DAYS
+import com.shawady.bodywise.data.daysOfStockLeft
+import com.shawady.bodywise.data.overdueVitals
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -27,6 +30,24 @@ object Reminders {
     const val CHANNEL = "bodywise_reminders"
     private const val WATER = "water_reminder"
     private const val WEEKLY = "weekly_reminder"
+    private const val DAILY = "daily_checks"
+
+    /** Every day at 10:00: medicines about to run out and vitals not recorded lately. */
+    fun setDaily(context: Context, enabled: Boolean) {
+        val manager = WorkManager.getInstance(context)
+        if (enabled) {
+            val now = LocalDateTime.now()
+            var next = now.toLocalDate().atTime(LocalTime.of(10, 0))
+            if (!next.isAfter(now)) next = next.plusDays(1)
+            val request = PeriodicWorkRequestBuilder<ReminderWorker>(1, TimeUnit.DAYS)
+                .setInitialDelay(Duration.between(now, next))
+                .setInputData(Data.Builder().putString("kind", "daily").build())
+                .build()
+            manager.enqueueUniquePeriodicWork(DAILY, ExistingPeriodicWorkPolicy.KEEP, request)
+        } else {
+            manager.cancelUniqueWork(DAILY)
+        }
+    }
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -75,6 +96,16 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
                 val cups = snapshot.water[today.toString()] ?: 0
                 if (now.hour in 9..21 && cups < snapshot.waterGoal) {
                     show(1, "وقت المياه 💧", "شربت $cups من ${snapshot.waterGoal} أكواب النهارده.")
+                }
+            }
+            "daily" -> {
+                val runningOut = snapshot.medications.mapNotNull { m -> daysOfStockLeft(m)?.takeIf { it <= RUNOUT_WARN_DAYS }?.let { m.name to it } }
+                if (runningOut.isNotEmpty()) {
+                    show(3, "💊 دواء قرّب يخلص", runningOut.joinToString("، ") { (n, d) -> if (d <= 0) "$n خلص" else "$n هيخلص بعد $d يوم" })
+                }
+                val overdue = overdueVitals(snapshot.vitals, now)
+                if (overdue.isNotEmpty()) {
+                    show(4, "🩺 قياسات ما اتسجلتش", overdue.entries.joinToString("، ") { (t, d) -> "${t.label} من $d يوم" })
                 }
             }
             "weekly" -> {

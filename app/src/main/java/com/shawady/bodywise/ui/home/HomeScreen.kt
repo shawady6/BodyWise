@@ -29,6 +29,7 @@ import com.shawady.bodywise.data.SlotState
 import com.shawady.bodywise.data.VitalReading
 import com.shawady.bodywise.data.VitalType
 import com.shawady.bodywise.data.dashboardAlerts
+import com.shawady.bodywise.data.upcomingAppointments
 import com.shawady.bodywise.data.slotState
 import com.shawady.bodywise.data.slotsFor
 import com.shawady.bodywise.data.vitalWarning
@@ -58,7 +59,8 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
     val weights = vm.measurements.filter { it.values[Metric.WEIGHT] != null }
     val lastWeight = weights.firstOrNull()
     val alerts = dashboardAlerts(
-        now, slots, vm.medications, latestVitals, vm.waterFor(today), vm.waterGoal, vm.measurements.firstOrNull()?.date
+        now, slots, vm.medications, latestVitals, vm.waterFor(today), vm.waterGoal, vm.measurements.firstOrNull()?.date,
+        vm.appointments.toList(), vm.vitals.toList()
     )
 
     Column(
@@ -111,6 +113,23 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
                 }
             }
             OutlinedButton(onClick = { onNavigate(4) }, modifier = Modifier.fillMaxWidth()) { Text("روشتتي") }
+        }
+
+        val nextAppts = upcomingAppointments(vm.appointments, now).take(3)
+        if (nextAppts.isNotEmpty()) {
+            AppCard {
+                SectionTitle("📅", "مواعيدك القادمة")
+                nextAppts.forEach { a ->
+                    val day = when (a.at.toLocalDate()) { today -> "النهارده"; today.plusDays(1) -> "بكرة"; else -> a.at.toLocalDate().toString() }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
+                            if (a.reason.isNotBlank()) Hint(a.reason)
+                        }
+                        Text("$day • ${a.at.toLocalTime().format12()}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
         }
 
         AppCard {

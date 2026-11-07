@@ -30,7 +30,14 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/water_widget_info" />
         </receiver>
+        <receiver android:name=".widget.MedWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/med_widget_info" />
+        </receiver>
         <receiver android:name=".notify.MedReceiver" android:exported="false" />
+        <receiver android:name=".notify.ApptReceiver" android:exported="false" />
         <receiver android:name=".notify.MedBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

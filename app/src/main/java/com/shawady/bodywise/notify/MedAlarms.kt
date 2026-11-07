@@ -109,6 +109,7 @@ object MedAlarms {
             }
         }
         prefs.edit().putStringSet(REGISTRY, codes).apply()
+        com.shawady.bodywise.widget.MedWidgetProvider.refresh(app)
     }
 
     fun scheduleSnooze(context: Context, med: Medication, date: LocalDate, time: LocalTime) {
@@ -203,6 +204,7 @@ class MedReceiver : BroadcastReceiver() {
             MedAlarms.ACTION_TAKEN -> {
                 if (med != null) store.mark(med, date, time, DoseStatus.TAKEN, LocalDateTime.now())
                 app.getSystemService(NotificationManager::class.java).cancel(("false|$medId|$time").hashCode())
+                com.shawady.bodywise.widget.MedWidgetProvider.refresh(app)
             }
             MedAlarms.ACTION_SNOOZE -> {
                 if (med != null) {
@@ -219,5 +221,7 @@ class MedReceiver : BroadcastReceiver() {
 class MedBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         MedAlarms.rescheduleAll(context)
+        ApptAlarms.rescheduleAll(context)
+        Reminders.setDaily(context, context.getSharedPreferences("bodywise_data", Context.MODE_PRIVATE).getBoolean("daily_checks", true))
     }
 }

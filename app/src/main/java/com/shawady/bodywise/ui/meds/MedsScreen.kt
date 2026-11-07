@@ -81,6 +81,7 @@ import com.shawady.bodywise.data.DoseStatus
 import com.shawady.bodywise.data.MED_INSTRUCTIONS
 import com.shawady.bodywise.data.MED_UNITS
 import com.shawady.bodywise.data.Medication
+import com.shawady.bodywise.data.daysOfStockLeft
 import com.shawady.bodywise.data.STRIP_UNITS
 import com.shawady.bodywise.data.SlotState
 import com.shawady.bodywise.data.needsRefill
@@ -148,12 +149,13 @@ fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = sub, containerColor = Color.Transparent) {
-            Tab(selected = sub == 0, onClick = { sub = 0 }, text = { Text("الجرعات") })
-            Tab(selected = sub == 1, onClick = { sub = 1 }, text = { Text("الأدوية") })
+            Tab(selected = sub == 0, onClick = { sub = 0 }, text = { Text("الجرعات", fontSize = 14.sp, maxLines = 1) })
             Tab(
-                selected = sub == 2, onClick = { sub = 2 },
-                text = { Text(if (refillList.isNotEmpty()) "تجديد (${refillList.size})" else "تجديد", color = if (refillList.isNotEmpty()) Status.danger() else Color.Unspecified) }
+                selected = sub == 1, onClick = { sub = 1 },
+                text = { Text(if (refillList.isNotEmpty()) "الأدوية (${refillList.size})" else "الأدوية", fontSize = 14.sp, maxLines = 1, color = if (refillList.isNotEmpty()) Status.danger() else Color.Unspecified) }
             )
+            Tab(selected = sub == 2, onClick = { sub = 2 }, text = { Text("الدكاترة", fontSize = 14.sp, maxLines = 1) })
+            Tab(selected = sub == 3, onClick = { sub = 3 }, text = { Text("ملفي", fontSize = 14.sp, maxLines = 1) })
         }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -161,10 +163,14 @@ fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
         ) {
             when (sub) {
                 0 -> DosesTab(vm, now)
-                1 -> MedsTab(vm, onAdd = { adding = true }, onEdit = { editing = it }, onOpenSettings = onOpenSettings)
-                else -> RefillTab(vm, refillList) { refilling = it }
+                1 -> {
+                    if (refillList.isNotEmpty()) RefillTab(vm, refillList) { refilling = it }
+                    MedsTab(vm, onAdd = { adding = true }, onEdit = { editing = it }, onOpenSettings = onOpenSettings)
+                }
+                2 -> DoctorsTab(vm, now)
+                else -> MedicalFileTab(vm)
             }
-            Hint("التطبيق بينظّم مواعيد الدواء بس، ومش بيغني عن تعليمات الدكتور أو الصيدلي.")
+            if (sub <= 1) Hint("التطبيق بينظّم مواعيد الدواء بس، ومش بيغني عن تعليمات الدكتور أو الصيدلي.")
             Spacer(Modifier.padding(8.dp))
         }
     }
@@ -376,7 +382,7 @@ private fun MedCard(vm: BodyWiseViewModel, med: Medication, onEdit: (Medication)
                 )
             }
             Text(
-                "باقي ${med.stockText().orEmpty()}" + if (low) "  — محتاج تجديد ⚠️" else "",
+                "باقي ${med.stockText().orEmpty()}" + (daysOfStockLeft(med)?.let { " • يكفي $it يوم" } ?: "") + if (low) "  — محتاج تجديد ⚠️" else "",
                 fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (low) Status.danger() else MaterialTheme.colorScheme.onSurface
             )
         }

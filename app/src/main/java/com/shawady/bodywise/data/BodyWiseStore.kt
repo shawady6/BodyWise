@@ -24,7 +24,11 @@ class BodyWiseStore(private val context: Context) {
         targetWeight = prefs.getString("target_weight", null)?.let { parseDecimal(it) },
         vitals = runCatching { SnapshotJson.vitalsFromJson(JSONArray(prefs.getString("vitals", "[]") ?: "[]")) }.getOrDefault(emptyList()),
         medications = MedStore(context).loadMeds(),
-        doseLogs = MedStore(context).loadLogs().values.toList()
+        doseLogs = MedStore(context).loadLogs().values.toList(),
+        doctors = HealthStore(context).loadDoctors(),
+        appointments = HealthStore(context).loadAppointments(),
+        medProfile = HealthStore(context).loadProfile(),
+        medDocs = HealthStore(context).loadDocs()
     )
 
     fun save(snapshot: Snapshot) {
@@ -56,7 +60,8 @@ class SettingsStore(context: Context) {
             lastAutoBackup = prefs.getString("last_auto_backup", null),
             onboarded = prefs.getBoolean("onboarded", false),
             updateNotices = prefs.getBoolean("update_notices", true),
-            medTone = prefs.getString("med_tone", null)
+            medTone = prefs.getString("med_tone", null),
+            dailyChecks = prefs.getBoolean("daily_checks", true)
         )
     }
 
@@ -71,6 +76,7 @@ class SettingsStore(context: Context) {
             .putBoolean("onboarded", settings.onboarded)
             .putBoolean("update_notices", settings.updateNotices)
             .putString("med_tone", settings.medTone)
+            .putBoolean("daily_checks", settings.dailyChecks)
             .apply()
     }
 }

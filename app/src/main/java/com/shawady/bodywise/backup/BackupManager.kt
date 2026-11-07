@@ -41,6 +41,15 @@ object BackupManager {
                     zip.closeEntry()
                 }
             }
+            snapshot.medDocs.forEach { doc ->
+                val name = doc.photo?.let { File(it).name } ?: return@forEach
+                val file = File(photosDir, name)
+                if (file.isFile) {
+                    zip.putNextEntry(ZipEntry("docphotos/$name"))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
         }
     }
 
@@ -60,7 +69,7 @@ object BackupManager {
                     if (!entry.isDirectory) {
                         if (name == MANIFEST) {
                             total += copyLimited(zip, File(temp, MANIFEST), MAX_JSON)
-                        } else if (name.startsWith("photos/") || name.startsWith("medphotos/")) {
+                        } else if (name.startsWith("photos/") || name.startsWith("medphotos/") || name.startsWith("docphotos/")) {
                             val folder = name.substringBefore("/")
                             val fileName = name.removePrefix("$folder/")
                             if (fileName.isNotBlank() && File(fileName).name == fileName && !fileName.contains("..")) {
@@ -97,7 +106,17 @@ object BackupManager {
                     med.copy(photo = newName)
                 } else med.copy(photo = null)
             }
-            return parsed.copy(photos = photos, medications = meds)
+            val docs = parsed.medDocs.mapIndexed { index, doc ->
+                val source = doc.photo?.let { File(File(temp, "docphotos"), File(it).name) }
+                if (source != null && source.isFile) {
+                    val newName = "med_doc_restored_${System.currentTimeMillis()}_$index.jpg"
+                    val target = File(photosDir, newName)
+                    source.copyTo(target, overwrite = true)
+                    copied.add(target)
+                    doc.copy(photo = newName)
+                } else doc.copy(photo = null)
+            }
+            return parsed.copy(photos = photos, medications = meds, medDocs = docs)
         } catch (error: Exception) {
             copied.forEach { it.delete() }
             throw error

@@ -59,7 +59,11 @@ data class Snapshot(
     val targetWeight: Double? = null,
     val vitals: List<VitalReading> = emptyList(),
     val medications: List<Medication> = emptyList(),
-    val doseLogs: List<DoseLog> = emptyList()
+    val doseLogs: List<DoseLog> = emptyList(),
+    val doctors: List<Doctor> = emptyList(),
+    val appointments: List<Appointment> = emptyList(),
+    val medProfile: MedicalProfile = MedicalProfile(),
+    val medDocs: List<MedicalDoc> = emptyList()
 )
 
 /** themeMode: 0 = follow system, 1 = light, 2 = dark. */
@@ -74,5 +78,7 @@ data class AppSettings(
     /** Notify when a new version is published (checked about twice a day when online). */
     val updateNotices: Boolean = true,
     /** Ringtone for medication alarms (content URI string); null = system alarm sound. */
-    val medTone: String? = null
+    val medTone: String? = null,
+    /** Daily 10 AM check: medicines about to run out and vitals not recorded lately. */
+    val dailyChecks: Boolean = true
 )
