@@ -23,7 +23,11 @@ class HealthTest {
 
     @Test fun remindersSkipPastAndDone() {
         assertEquals(1, appointmentReminders(appt, LocalDateTime.of(2026, 11, 9, 21, 0)).size)
-        assertTrue(appointmentReminders(appt, LocalDateTime.of(2026, 11, 10, 16, 0)).isEmpty())
+        // booked on short notice: a single reminder 15 minutes before
+        val late = appointmentReminders(appt, LocalDateTime.of(2026, 11, 10, 16, 0))
+        assertEquals(listOf(ApptReminder.QUARTER), late.map { it.first })
+        assertEquals(LocalDateTime.of(2026, 11, 10, 16, 45), late[0].second)
+        assertTrue(appointmentReminders(appt, LocalDateTime.of(2026, 11, 10, 16, 50)).isEmpty())
         assertTrue(appointmentReminders(appt.copy(done = true), LocalDateTime.of(2026, 11, 8, 9, 0)).isEmpty())
     }
 
@@ -140,5 +144,33 @@ class CareTest {
         val back = SnapshotJson.fromBackup(SnapshotJson.toBackup(Snapshot(people = people), LocalDate.of(2026, 11, 8)))
         assertEquals(people, back.people)
         assertEquals(MAX_PEOPLE, 3)
+    }
+}
+
+
+class ReliabilityTest {
+    private val fired = LocalDateTime.of(2026, 11, 8, 8, 0)
+    private fun log(status: DoseStatus, at: LocalDateTime) = DoseLog("m", LocalDate.of(2026, 11, 8), LocalTime.of(8, 0), status, at)
+
+    @Test fun repeatOnlyWhenNothingWasDone() {
+        assertTrue(shouldRepeatReminder(null, fired))
+        assertFalse(shouldRepeatReminder(log(DoseStatus.TAKEN, fired.plusMinutes(3)), fired))
+        assertFalse(shouldRepeatReminder(log(DoseStatus.SKIPPED, fired.plusMinutes(3)), fired))
+        // snoozed after the alarm fired: the snooze brings its own alarm
+        assertFalse(shouldRepeatReminder(log(DoseStatus.SNOOZED, fired.plusMinutes(2)), fired))
+        // a snooze from an earlier ring, alarm fired again since: remind
+        assertTrue(shouldRepeatReminder(log(DoseStatus.SNOOZED, fired.minusMinutes(8)), fired))
+        assertEquals(listOf(15L, 30L), REPEAT_REMINDER_MINUTES)
+    }
+
+    @Test fun backupReminder() {
+        val day = 24L * 60 * 60 * 1000
+        val now = 100 * day
+        assertEquals(null, backupOverdueDays(now - 3 * day, now - 50 * day, now))
+        assertEquals(20L, backupOverdueDays(now - 20 * day, now - 50 * day, now))
+        // never backed up: counted from install
+        assertEquals(null, backupOverdueDays(0, now - 5 * day, now))
+        assertEquals(30L, backupOverdueDays(0, now - 30 * day, now))
+        assertEquals(BACKUP_REMINDER_DAYS, 14L)
     }
 }

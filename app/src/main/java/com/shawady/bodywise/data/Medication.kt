@@ -139,3 +139,25 @@ fun suggestTimes(count: Int, existing: List<LocalTime>): List<LocalTime> {
     while (result.size < count) { val t = LocalTime.of(hour++ % 24, 0); if (t !in result) result.add(t) }
     return result.sorted()
 }
+
+/** Minutes after the first alarm when a "still not taken" reminder repeats. */
+val REPEAT_REMINDER_MINUTES = listOf(15L, 30L)
+
+/**
+ * A repeat reminder rings only if the person did nothing about the dose since the alarm fired:
+ * not taken, not skipped and not snoozed (a snooze brings its own alarm).
+ */
+fun shouldRepeatReminder(log: DoseLog?, firedAt: LocalDateTime): Boolean = when {
+    log == null -> true
+    log.status == DoseStatus.TAKEN || log.status == DoseStatus.SKIPPED -> false
+    else -> log.at.isBefore(firedAt)
+}
+
+/** Days without a backup after which the app reminds the person; null while recent enough. */
+const val BACKUP_REMINDER_DAYS = 14L
+
+fun backupOverdueDays(lastBackupMillis: Long, firstInstallMillis: Long, nowMillis: Long): Long? {
+    val reference = maxOf(lastBackupMillis, firstInstallMillis)
+    val days = (nowMillis - reference) / (24L * 60 * 60 * 1000)
+    return days.takeIf { it >= BACKUP_REMINDER_DAYS }
+}

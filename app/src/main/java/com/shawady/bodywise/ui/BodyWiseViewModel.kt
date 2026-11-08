@@ -84,6 +84,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         reloadHealth()
         com.shawady.bodywise.notify.MedAlarms.rescheduleAll(app)
         com.shawady.bodywise.notify.ApptAlarms.ensureChannel(app)
+        com.shawady.bodywise.notify.MedAlarms.ensureChannel(app)
         com.shawady.bodywise.notify.ApptAlarms.rescheduleAll(app)
         Reminders.setDaily(app, settings.dailyChecks)
         cleanOrphanPhotos()
@@ -343,6 +344,11 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- People I look after ----
+    fun setRepeatAlerts(enabled: Boolean) = update { it.copy(repeatAlerts = enabled) }
+
+    /** Days without a backup once it passes the reminder threshold (since install if never backed up). */
+    fun backupOverdueDays(): Long? = com.shawady.bodywise.notify.Reminders.backupOverdueDays(getApplication())
+
     fun setCareEnabled(enabled: Boolean) = update { it.copy(careEnabled = enabled) }
 
     /** Returns an error message, or null when added. */
@@ -450,6 +456,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
                     output.use { BackupManager.writeZip(it, snap, store.photosDir) }
                 }
             }
+            if (result.isSuccess) context.getSharedPreferences("bodywise_data", android.content.Context.MODE_PRIVATE).edit().putLong("last_backup", System.currentTimeMillis()).apply()
             backupMessage = if (result.isSuccess) "تم حفظ النسخة الاحتياطية بنجاح، بالصور والبيانات."
             else "فشل إنشاء النسخة الاحتياطية: ${result.exceptionOrNull()?.message ?: "خطأ غير معروف"}"
             busy = false

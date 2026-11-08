@@ -32,6 +32,12 @@ object Reminders {
     private const val WEEKLY = "weekly_reminder"
     private const val DAILY = "daily_checks"
 
+    fun backupOverdueDays(context: Context): Long? {
+        val prefs = context.getSharedPreferences("bodywise_data", Context.MODE_PRIVATE)
+        val install = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).firstInstallTime }.getOrDefault(System.currentTimeMillis())
+        return com.shawady.bodywise.data.backupOverdueDays(prefs.getLong("last_backup", 0L), install, System.currentTimeMillis())
+    }
+
     /** Every day at 10:00: medicines about to run out and vitals not recorded lately. */
     fun setDaily(context: Context, enabled: Boolean) {
         val manager = WorkManager.getInstance(context)
@@ -102,6 +108,9 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
                 val runningOut = snapshot.medications.mapNotNull { m -> daysOfStockLeft(m)?.takeIf { it <= RUNOUT_WARN_DAYS }?.let { com.shawady.bodywise.data.medLabel(m, snapshot.people) to it } }
                 if (runningOut.isNotEmpty()) {
                     show(3, "💊 دواء قرّب يخلص", runningOut.joinToString("، ") { (n, d) -> if (d <= 0) "$n خلص" else "$n هيخلص بعد $d يوم" })
+                }
+                Reminders.backupOverdueDays(applicationContext)?.let { days ->
+                    show(5, "💾 خد نسخة احتياطية", "عدّى $days يوم من آخر نسخة. الإعدادات ← النسخ الاحتياطي.")
                 }
                 val overdue = overdueVitals(snapshot.vitals, now)
                 if (overdue.isNotEmpty()) {

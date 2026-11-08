@@ -81,7 +81,7 @@ data class MedicalDoc(
     val photo: String? = null
 )
 
-enum class ApptReminder(val label: String) { EVENING_BEFORE("الليلة اللي قبله"), TWO_HOURS("قبله بساعتين") }
+enum class ApptReminder(val label: String) { EVENING_BEFORE("الليلة اللي قبله"), TWO_HOURS("قبله بساعتين"), QUARTER("قبله بربع ساعة") }
 
 val EVENING_BEFORE_TIME: LocalTime = LocalTime.of(20, 0)
 
@@ -92,7 +92,11 @@ fun appointmentReminders(appt: Appointment, now: LocalDateTime): List<Pair<ApptR
         ApptReminder.EVENING_BEFORE to appt.at.toLocalDate().minusDays(1).atTime(EVENING_BEFORE_TIME),
         ApptReminder.TWO_HOURS to appt.at.minusHours(2)
     )
-    return list.filter { it.second.isAfter(now) && it.second.isBefore(appt.at) }
+    val upcoming = list.filter { it.second.isAfter(now) && it.second.isBefore(appt.at) }
+    if (upcoming.isNotEmpty()) return upcoming
+    // Booked on short notice: still give one reminder shortly before the visit.
+    val quarter = appt.at.minusMinutes(15)
+    return if (quarter.isAfter(now)) listOf(ApptReminder.QUARTER to quarter) else emptyList()
 }
 
 fun upcomingAppointments(list: List<Appointment>, now: LocalDateTime): List<Appointment> =

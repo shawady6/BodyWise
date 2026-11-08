@@ -83,5 +83,7 @@ data class AppSettings(
     /** Daily 10 AM check: medicines about to run out and vitals not recorded lately. */
     val dailyChecks: Boolean = true,
     /** "I look after someone": shows the person picker for medications and appointments. */
-    val careEnabled: Boolean = false
+    val careEnabled: Boolean = false,
+    /** "Still not taken" reminders 15 and 30 minutes after a dose alarm. */
+    val repeatAlerts: Boolean = true
 )

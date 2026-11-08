@@ -63,7 +63,8 @@ class SettingsStore(context: Context) {
             updateNotices = prefs.getBoolean("update_notices", true),
             medTone = prefs.getString("med_tone", null),
             dailyChecks = prefs.getBoolean("daily_checks", true),
-            careEnabled = prefs.getBoolean("care_enabled", false)
+            careEnabled = prefs.getBoolean("care_enabled", false),
+            repeatAlerts = prefs.getBoolean("repeat_alerts", true)
         )
     }
 
@@ -80,6 +81,7 @@ class SettingsStore(context: Context) {
             .putString("med_tone", settings.medTone)
             .putBoolean("daily_checks", settings.dailyChecks)
             .putBoolean("care_enabled", settings.careEnabled)
+            .putBoolean("repeat_alerts", settings.repeatAlerts)
             .apply()
     }
 }

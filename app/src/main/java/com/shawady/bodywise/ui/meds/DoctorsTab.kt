@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -123,16 +124,12 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
                 d,
                 onCall = { Context_start(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${dialNumber(d.phone)}")), vm, "تعذر فتح الاتصال") },
                 onWhatsapp = { Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${whatsappNumber(d.phone)}")), vm, "تعذر فتح واتساب") },
-                onMap = {
-                    val q = listOf(d.clinic, d.address).filter { it.isNotBlank() }.joinToString(" ")
-                    Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${Uri.encode(q)}")), vm, "تعذر فتح الخرائط")
-                },
                 onBook = { apptPrefillDoctor = d; addingAppt = true },
                 onEdit = { doctorEditor = d },
                 onDelete = { vm.deleteDoctor(d) }
             )
         }
-        OutlinedButton(onClick = { addingDoctor = true }, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = { addingDoctor = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, null); Text("  دكتور جديد")
         }
     }
@@ -201,7 +198,7 @@ private fun ApptRow(a: Appointment, now: LocalDateTime, onEdit: () -> Unit, onDo
 
 @Composable
 private fun DoctorCard(
-    d: Doctor, onCall: () -> Unit, onWhatsapp: () -> Unit, onMap: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
+    d: Doctor, onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -214,14 +211,20 @@ private fun DoctorCard(
         }
         if (d.clinic.isNotBlank() || d.address.isNotBlank()) Hint("📍 " + listOf(d.clinic, d.address).filter { it.isNotBlank() }.joinToString(" - "))
         if (d.notes.isNotBlank()) Hint("📝 ${d.notes}")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (d.phone.isNotBlank()) {
-                Button(onClick = onCall, modifier = Modifier.weight(1.4f)) { Text("📞 ${d.phone}", maxLines = 1) }
-                OutlinedButton(onClick = onWhatsapp, modifier = Modifier.weight(1f)) { Text("واتساب") }
+        if (d.phone.isNotBlank()) {
+            Button(onClick = onCall, modifier = Modifier.fillMaxWidth()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("📞 اتصال", fontSize = 14.sp)
+                    Text(d.phone, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            if (d.clinic.isNotBlank() || d.address.isNotBlank()) OutlinedButton(onClick = onMap, modifier = Modifier.weight(1f)) { Text("خريطة") }
         }
-        OutlinedButton(onClick = onBook, modifier = Modifier.fillMaxWidth()) { Text("📅 احجز موعد") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            if (d.phone.isNotBlank()) {
+                OutlinedButton(onClick = onWhatsapp, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("💬 واتساب", maxLines = 1, softWrap = false, fontSize = 14.sp) }
+            }
+            OutlinedButton(onClick = onBook, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("📅 احجز موعد", maxLines = 1, softWrap = false, fontSize = 14.sp) }
+        }
     }
 }
 

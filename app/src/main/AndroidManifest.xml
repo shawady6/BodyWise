@@ -38,6 +38,7 @@
         </receiver>
         <receiver android:name=".notify.MedReceiver" android:exported="false" />
         <receiver android:name=".notify.ApptReceiver" android:exported="false" />
+        <receiver android:name=".notify.TestReceiver" android:exported="false" />
         <receiver android:name=".notify.MedBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

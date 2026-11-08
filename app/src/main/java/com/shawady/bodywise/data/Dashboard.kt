@@ -18,9 +18,13 @@ fun dashboardAlerts(
     lastMeasurement: LocalDate?,
     appointments: List<Appointment> = emptyList(),
     allVitals: List<VitalReading> = emptyList(),
-    people: List<Person> = emptyList()
+    people: List<Person> = emptyList(),
+    /** Alarm reliability problems (muted notifications...) shown first, and the days since the last backup. */
+    alarmProblems: List<String> = emptyList(),
+    backupOverdueDays: Long? = null
 ): List<DashAlert> {
     val alerts = mutableListOf<DashAlert>()
+    if (meds.isNotEmpty()) alarmProblems.forEach { alerts.add(DashAlert("⚠️ $it", true)) }
     latestVitals.forEach { r ->
         val w = vitalWarning(r) ?: return@forEach
         if (Duration.between(r.at, now).toHours() < 24) {
@@ -55,5 +59,6 @@ fun dashboardAlerts(
     if (lastMeasurement != null && Duration.between(lastMeasurement.atStartOfDay(), now).toDays() >= 7) {
         alerts.add(DashAlert("عدّى ${Duration.between(lastMeasurement.atStartOfDay(), now).toDays()} يوم من آخر قياس للوزن والمقاسات", false))
     }
+    if (backupOverdueDays != null) alerts.add(DashAlert("💾 عدّى $backupOverdueDays يوم من غير نسخة احتياطية (الإعدادات ← النسخ الاحتياطي)", false))
     return alerts.sortedByDescending { it.severe }
 }

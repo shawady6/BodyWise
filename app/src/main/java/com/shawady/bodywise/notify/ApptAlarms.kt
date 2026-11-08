@@ -83,7 +83,12 @@ object ApptAlarms {
         ensureChannel(context)
         val who = appt.doctorName.ifBlank { "الدكتور" }
         val forPerson = com.shawady.bodywise.data.personName(appt.personId, HealthStore(context).loadPeople())
-        val whenText = if (kind == ApptReminder.EVENING_BEFORE) "بكرة الساعة ${appt.at.toLocalTime().format12()}" else "الساعة ${appt.at.toLocalTime().format12()} (بعد ساعتين)"
+        val clock = appt.at.toLocalTime().format12()
+        val whenText = when (kind) {
+            ApptReminder.EVENING_BEFORE -> "بكرة الساعة $clock"
+            ApptReminder.TWO_HOURS -> "الساعة $clock (بعد ساعتين)"
+            ApptReminder.QUARTER -> "الساعة $clock (بعد ربع ساعة)"
+        }
         val text = whenText + if (appt.reason.isNotBlank()) " • ${appt.reason}" else ""
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(context, CHANNEL)

@@ -60,7 +60,9 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
     val lastWeight = weights.firstOrNull()
     val alerts = dashboardAlerts(
         now, slots, vm.medications, latestVitals, vm.waterFor(today), vm.waterGoal, vm.measurements.firstOrNull()?.date,
-        vm.appointments.toList(), vm.vitals.toList(), vm.people.toList()
+        vm.appointments.toList(), vm.vitals.toList(), vm.people.toList(),
+        alarmProblems = com.shawady.bodywise.notify.alarmProblems(androidx.compose.ui.platform.LocalContext.current),
+        backupOverdueDays = vm.backupOverdueDays()
     )
 
     Column(

@@ -107,6 +107,8 @@ fun AlertsPanel(vm: BodyWiseViewModel) {
         StatusLine("الظهور فوق التطبيقات", "علشان التنبيه يفتح شاشة كاملة والموبايل مفتوح", overlayOk, askOverlay)
         StatusLine("استثناء من توفير البطارية", "علشان التنبيه يشتغل والتطبيق مقفول (مهم في شاومي وسامسونج وأوبو)", batteryOk, askBattery)
 
+        ExtraSteps(context)
+
         OutlinedButton(onClick = {
             tonePicker.launch(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                 putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_RINGTONE)
@@ -124,6 +126,8 @@ fun AlertsPanel(vm: BodyWiseViewModel) {
             })
         }, modifier = Modifier.fillMaxWidth()) { Text("اهتزاز وإعدادات القناة") }
         Button(onClick = { MedAlarms.sendTest(context) }, modifier = Modifier.fillMaxWidth()) { Text("جرّب تنبيه دلوقتي") }
+        OutlinedButton(onClick = { MedAlarms.scheduleTestIn(context, 1) }, modifier = Modifier.fillMaxWidth()) { Text("⏱ جرّب تنبيه بعد دقيقة (اقفل الشاشة وانتظر)") }
+        Hint("ده الاختبار الحقيقي: اقفل الموبايل، واتأكد إن التنبيه بيرن في الدقيقة المظبوطة.")
     }
 }
 
@@ -136,5 +140,39 @@ private fun StatusLine(label: String, why: String, ok: Boolean, onFix: () -> Uni
     Column {
         Text((if (ok) "✅ " else "⚠️ ") + label + (if (ok) " — تمام" else " — محتاج تفعيل"), fontSize = 13.sp, color = if (ok) Status.success() else Status.warning())
         if (!ok) Hint(why)
+    }
+}
+
+/** Settings that Android cannot report to the app, so they are explained step by step with a shortcut to each page. */
+@Composable
+private fun ExtraSteps(context: Context) {
+    val maker = Build.MANUFACTURER.lowercase()
+    val brand = when {
+        maker.contains("realme") || maker.contains("oppo") || maker.contains("oneplus") -> "ريلمي / أوبو"
+        maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco") -> "شاومي"
+        maker.contains("samsung") -> "سامسونج"
+        maker.contains("huawei") || maker.contains("honor") -> "هواوي / هونر"
+        else -> null
+    }
+    val brandTip = when (brand) {
+        "ريلمي / أوبو" -> "إعدادات ← البطارية ← استخدام التطبيق في الخلفية ← BodyWise ← \"السماح بالنشاط في الخلفية\" و\"السماح بالتشغيل التلقائي\"."
+        "شاومي" -> "إعدادات ← التطبيقات ← إدارة التطبيقات ← BodyWise ← \"التشغيل التلقائي\" شغّله، و\"توفير البطارية\" ← \"بدون قيود\"."
+        "سامسونج" -> "إعدادات ← البطارية ← حدود استخدام الخلفية ← \"تطبيقات لا تدخل في السكون أبدًا\" ← أضف BodyWise."
+        "هواوي / هونر" -> "إعدادات ← التطبيقات ← تشغيل التطبيقات ← BodyWise ← \"الإدارة اليدوية\" وفعّل الثلاثة اختيارات."
+        else -> null
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("خطوات لازم تتأكد منها بنفسك", fontSize = 14.sp, color = Status.warning())
+        Hint("أندرويد مش بيقول للتطبيق لو الإعدادات دي مفعّلة، فاتأكد منها مرة واحدة.")
+        Text("1) إيقاف النشاط لو التطبيق مش مستخدم", fontSize = 13.sp)
+        Hint("لازم يتقفل. لو شغّال، النظام بيشيل صلاحيات التطبيق ويوقف التنبيهات بعد فترة من غير ما تفتحه. الاسم: \"إيقاف النشاط في التطبيق إذا لم يُستخدم\" أو \"إزالة الأذونات وتحرير المساحة\".")
+        OutlinedButton(onClick = { open(context, Intent("android.intent.action.AUTO_REVOKE_PERMISSIONS", Uri.parse("package:${context.packageName}"))) }, modifier = Modifier.fillMaxWidth()) { Text("افتح الإعداد ده") }
+        Text("2) \"السماح بالإعدادات المقيّدة\"", fontSize = 13.sp)
+        Hint("لو الصلاحيات بتتقفل ومش راضية تتفعّل: افتح معلومات التطبيق، واضغط القايمة ⋮ (فوق على اليمين) واختار \"السماح بالإعدادات المقيّدة\". الخيار ده بيظهر بس بعد ما تحاول تفعّل صلاحية وتتقفل.")
+        OutlinedButton(onClick = { open(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }, modifier = Modifier.fillMaxWidth()) { Text("افتح معلومات التطبيق") }
+        if (brandTip != null) {
+            Text("3) إعدادات موبايل $brand", fontSize = 13.sp)
+            Hint(brandTip)
+        }
     }
 }
