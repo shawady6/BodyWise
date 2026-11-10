@@ -190,7 +190,7 @@ class CatalogTest {
 
     @Test fun doctorSearch() {
         val d = Doctor("d1", "أحمد علاء", "أسنان", "0101", "عيادة شبيش")
-        assertTrue(matchesDoctor(d, "اسنان".replace("ا", "أ")))
+        assertTrue(matchesDoctor(d, "أسنان"))
         assertTrue(matchesDoctor(d, "شبيش"))
         assertFalse(matchesDoctor(d, "عيون"))
         assertTrue(matchesDoctor(d, ""))
