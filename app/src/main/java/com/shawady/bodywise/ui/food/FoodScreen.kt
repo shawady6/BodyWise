@@ -94,7 +94,7 @@ fun FoodScreen(vm: BodyWiseViewModel) {
                     val active = day == selected
                     Surface(
                         onClick = { vm.selectedDate = day },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         modifier = Modifier.weight(1f)
                     ) {

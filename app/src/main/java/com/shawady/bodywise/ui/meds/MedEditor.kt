@@ -254,7 +254,7 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                                 }
                             } else {
                                 Surface(
-                                    onClick = { takePhoto() }, shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                                    onClick = { takePhoto() }, shape = MaterialTheme.shapes.medium,
                                     color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -372,7 +372,7 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                             if (boxesN != null && perBox != null) {
                                 val total = formatNumber(Math.round(boxesN * perBox * 10) / 10.0)
                                 val formula = if (isStrip && stripsN != null) "${formatNumber(boxesN)} علبة × $stripsN شريط × $perStripN $unit" else "${formatNumber(boxesN)} علبة × ${formatNumber(perBox)} $unit"
-                                Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(14.dp)) {
                                         Hint(formula)
                                         Text("= $total $unit", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -387,7 +387,7 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                                 TextButton(onClick = { showNotes = true }) { Text("＋ إضافة ملاحظة") }
                             }
                             // --- summary
-                            Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+                            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text("الملخص", fontWeight = FontWeight.Bold)
                                     Text(

@@ -1,6 +1,9 @@
 package com.shawady.bodywise.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -29,9 +32,22 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF3A463E)
 )
 
+/**
+ * One rounded design language for every component: pills for buttons and chips, 20dp for text fields, menus and
+ * cards, larger radii for dialogs. Components read these through MaterialTheme.shapes, so nothing falls back to
+ * Material's sharp defaults.
+ */
+val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(20.dp),
+    small = RoundedCornerShape(50),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
+
 @Composable
 fun BodyWiseTheme(dark: Boolean, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
+    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, shapes = AppShapes, content = content)
 }
 
 /** Meaning colors with light and dark variants, so warnings stay readable in both themes. */

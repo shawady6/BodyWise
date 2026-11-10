@@ -272,6 +272,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                     onClick = { addingDoctor = true },
                     icon = { Icon(Icons.Default.Add, null) },
                     text = { Text("دكتور جديد") },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
                 )
             }
