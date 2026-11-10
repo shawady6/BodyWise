@@ -1,11 +1,9 @@
 package com.shawady.bodywise.ui.meds
 
 import android.content.Intent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.filled.Close
@@ -112,21 +110,27 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     var query by remember { mutableStateOf("") }
     var showCatalog by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(searching) { if (searching) runCatching { focus.requestFocus() } }
+    LaunchedEffect(searching) { if (searching) { kotlinx.coroutines.delay(60); runCatching { focus.requestFocus() } } }
 
     // Catalog button always stays on top; the search icon turns the row into a search bar.
+    // The row keeps a fixed layout (a slot that fills the width + one icon), so nothing is resized while animating;
+    // only the slot's content fades between the catalog button and the search field.
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        AnimatedVisibility(visible = !searching, modifier = Modifier.weight(1f), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
-            Button(onClick = { showCatalog = true }, modifier = Modifier.fillMaxWidth()) { Text("📒 كاتلوج الدكاترة (${vm.doctors.size})") }
+        Box(Modifier.weight(1f).height(56.dp), contentAlignment = Alignment.Center) {
+            Crossfade(targetState = searching, animationSpec = tween(150), label = "search") { isSearching ->
+                if (isSearching) {
+                    OutlinedTextField(
+                        query, { query = it }, singleLine = true, placeholder = { Text("ابحث في المواعيد...") },
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    )
+                } else {
+                    Button(onClick = { showCatalog = true }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("📒 كاتلوج الدكاترة (${vm.doctors.size})") }
+                }
+            }
         }
-        AnimatedVisibility(visible = searching, modifier = Modifier.weight(1f), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
-            OutlinedTextField(
-                query, { query = it }, singleLine = true, placeholder = { Text("ابحث في المواعيد...") },
-                trailingIcon = { IconButton(onClick = { searching = false; query = "" }) { Icon(Icons.Default.Close, "إغلاق البحث") } },
-                modifier = Modifier.fillMaxWidth().focusRequester(focus)
-            )
+        IconButton(onClick = { if (searching) { searching = false; query = "" } else searching = true }) {
+            Icon(if (searching) Icons.Default.Close else Icons.Default.Search, if (searching) "إغلاق البحث" else "بحث في المواعيد")
         }
-        if (!searching) IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "بحث في المواعيد") }
     }
 
     val results = if (searching && query.isNotBlank()) vm.appointments.filter { matchesAppointment(it, query, vm.people) }.sortedByDescending { it.at } else null
