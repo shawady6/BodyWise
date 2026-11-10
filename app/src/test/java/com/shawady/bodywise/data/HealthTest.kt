@@ -174,3 +174,35 @@ class ReliabilityTest {
         assertEquals(BACKUP_REMINDER_DAYS, 14L)
     }
 }
+
+class CatalogTest {
+    private val people = listOf(Person("p1", "أحمد"))
+    private val a = Appointment("a", "d1", "د. سامي", LocalDateTime.of(2026, 11, 12, 17, 0), "تقويم أسنان", true, "ييجي بعد شهر", "p1")
+
+    @Test fun appointmentSearch() {
+        assertTrue(matchesAppointment(a, "سامي", people))
+        assertTrue(matchesAppointment(a, "أسنان", people))
+        assertTrue(matchesAppointment(a, "بعد شهر", people))
+        assertTrue(matchesAppointment(a, "أحمد", people))
+        assertFalse(matchesAppointment(a, "عيون", people))
+        assertTrue(matchesAppointment(a, "  ", people))
+    }
+
+    @Test fun doctorSearch() {
+        val d = Doctor("d1", "أحمد علاء", "أسنان", "0101", "عيادة شبيش")
+        assertTrue(matchesDoctor(d, "اسنان".replace("ا", "أ")))
+        assertTrue(matchesDoctor(d, "شبيش"))
+        assertFalse(matchesDoctor(d, "عيون"))
+        assertTrue(matchesDoctor(d, ""))
+    }
+
+    @Test fun nextAppointment() {
+        val d = Doctor("d1", "د. سامي")
+        val now = LocalDateTime.of(2026, 11, 10, 9, 0)
+        val later = Appointment("x", "d1", "د. سامي", LocalDateTime.of(2026, 11, 20, 17, 0))
+        val sooner = Appointment("y", null, "د. سامي", LocalDateTime.of(2026, 11, 14, 17, 0))
+        val other = Appointment("z", "d2", "د. تاني", LocalDateTime.of(2026, 11, 11, 17, 0))
+        assertEquals("y", nextAppointmentFor(d, listOf(later, sooner, other), now)?.id)
+        assertEquals(null, nextAppointmentFor(d, listOf(other, later.copy(done = true)), now))
+    }
+}

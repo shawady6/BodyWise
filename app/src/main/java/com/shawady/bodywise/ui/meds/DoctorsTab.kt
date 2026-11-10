@@ -1,6 +1,25 @@
 package com.shawady.bodywise.ui.meds
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.shawady.bodywise.data.matchesAppointment
+import com.shawady.bodywise.data.matchesDoctor
+import com.shawady.bodywise.data.nextAppointmentFor
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -80,8 +99,6 @@ private fun Context_start(context: android.content.Context, intent: Intent, vm: 
 @Composable
 fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     val context = LocalContext.current
-    var doctorEditor by remember { mutableStateOf<Doctor?>(null) }
-    var addingDoctor by remember { mutableStateOf(false) }
     var apptEditor by remember { mutableStateOf<Appointment?>(null) }
     var addingAppt by remember { mutableStateOf(false) }
     var apptPrefillDoctor by remember { mutableStateOf<Doctor?>(null) }
@@ -91,71 +108,76 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
     val upcoming = upcomingAppointments(vm.appointments, now)
     val overdue = overdueAppointments(vm.appointments, now)
     val past = vm.appointments.filter { it.done }.sortedByDescending { it.at }
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var showCatalog by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(searching) { if (searching) runCatching { focus.requestFocus() } }
 
-    AppCard {
-        SectionTitle("📅", "مواعيدك القادمة")
-        if (upcoming.isEmpty()) Hint("مفيش مواعيد. أضف موعد وهنفكّرك الليلة اللي قبله وقبله بساعتين.")
-        groupByPerson(upcoming, { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
-            if (title != null) PersonHeader(title)
-            list.forEach { a -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }) }
+    // Catalog button always stays on top; the search icon turns the row into a search bar.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        AnimatedVisibility(visible = !searching, modifier = Modifier.weight(1f), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+            Button(onClick = { showCatalog = true }, modifier = Modifier.fillMaxWidth()) { Text("📒 كاتلوج الدكاترة (${vm.doctors.size})") }
         }
-        Button(onClick = { apptPrefillDoctor = null; addingAppt = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, null); Text("  موعد جديد")
+        AnimatedVisibility(visible = searching, modifier = Modifier.weight(1f), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+            OutlinedTextField(
+                query, { query = it }, singleLine = true, placeholder = { Text("ابحث في المواعيد...") },
+                trailingIcon = { IconButton(onClick = { searching = false; query = "" }) { Icon(Icons.Default.Close, "إغلاق البحث") } },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus)
+            )
         }
+        if (!searching) IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "بحث في المواعيد") }
     }
 
-    if (overdue.isNotEmpty()) {
+    val results = if (searching && query.isNotBlank()) vm.appointments.filter { matchesAppointment(it, query, vm.people) }.sortedByDescending { it.at } else null
+    if (results != null) {
         AppCard {
-            SectionTitle("❓", "عدّى ميعادها — اتزورت؟")
-            groupByPerson(overdue.take(5), { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
-                if (title != null) PersonHeader(title)
-                list.forEach { a ->
-                    ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }, overdue = true)
+            SectionTitle("🔍", "نتايج البحث (${results.size})")
+            if (results.isEmpty()) Hint("مفيش مواعيد مطابقة.")
+            results.forEach { a ->
+                when {
+                    a.done -> PastRow(a, vm.people) { vm.deleteAppointment(a) }
+                    overdue.any { it.id == a.id } -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }, overdue = true)
+                    else -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) })
                 }
             }
         }
-    }
-
-    AppCard {
-        SectionTitle("👨‍⚕️", "الدكاترة")
-        if (vm.doctors.isEmpty()) Hint("سجّل اسم الدكتور ورقمه وعيادته، وبضغطة واحدة تتصل بيه.")
-        vm.doctors.forEach { d ->
-            DoctorCard(
-                d,
-                onCall = { Context_start(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${dialNumber(d.phone)}")), vm, "تعذر فتح الاتصال") },
-                onWhatsapp = { Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${whatsappNumber(d.phone)}")), vm, "تعذر فتح واتساب") },
-                onBook = { apptPrefillDoctor = d; addingAppt = true },
-                onEdit = { doctorEditor = d },
-                onDelete = { vm.deleteDoctor(d) }
-            )
-        }
-        Button(onClick = { addingDoctor = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, null); Text("  دكتور جديد")
-        }
-    }
-
-    if (past.isNotEmpty()) {
+    } else {
         AppCard {
-            SectionTitle("🗂", "زيارات سابقة")
-            past.take(15).forEach { a ->
-                Column(Modifier.fillMaxWidth()) {
-                    personName(a.personId, vm.people)?.let { Hint("👤 $it") }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
-                            Hint("${a.at.toLocalDate()} ${a.at.toLocalTime().format12()}" + if (a.reason.isNotBlank()) " • ${a.reason}" else "")
-                            if (a.outcome.isNotBlank()) Text("📝 ${a.outcome}", fontSize = 13.sp)
-                        }
-                        IconButton(onClick = { vm.deleteAppointment(a) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
+            SectionTitle("📅", "مواعيدك القادمة")
+            if (upcoming.isEmpty()) Hint("مفيش مواعيد. أضف موعد وهنفكّرك الليلة اللي قبله وقبله بساعتين.")
+            groupByPerson(upcoming, { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
+                if (title != null) PersonHeader(title)
+                list.forEach { a -> ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }) }
+            }
+            Button(onClick = { apptPrefillDoctor = null; addingAppt = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Add, null); Text("  موعد جديد")
+            }
+        }
+
+        if (overdue.isNotEmpty()) {
+            AppCard {
+                SectionTitle("❓", "عدّى ميعادها — اتزورت؟")
+                groupByPerson(overdue.take(5), { it.personId }, vm.people, vm.settings.careEnabled).forEach { (title, list) ->
+                    if (title != null) PersonHeader(title)
+                    list.forEach { a ->
+                        ApptRow(a, now, onEdit = { apptEditor = a }, onDone = { finishing = a }, onDelete = { vm.deleteAppointment(a) }, overdue = true)
                     }
                 }
             }
         }
+
+        if (past.isNotEmpty()) {
+            AppCard {
+                SectionTitle("🗂", "زيارات سابقة")
+                past.take(15).forEach { a -> PastRow(a, vm.people) { vm.deleteAppointment(a) } }
+                if (past.size > 15) Hint("ظاهر آخر 15 زيارة. ابحث (🔍) علشان تلاقي الباقي.")
+            }
+        }
     }
 
-    if (addingDoctor || doctorEditor != null) {
-        DoctorDialog(doctorEditor, onDismiss = { addingDoctor = false; doctorEditor = null }, onSave = { vm.saveDoctor(it); addingDoctor = false; doctorEditor = null })
-    }
+    if (showCatalog) DoctorCatalog(vm, now) { showCatalog = false }
+
     if (addingAppt || apptEditor != null) {
         AppointmentDialog(
             vm, apptEditor, apptPrefillDoctor, apptPrefillPerson,
@@ -181,6 +203,85 @@ fun DoctorsTab(vm: BodyWiseViewModel, now: LocalDateTime) {
 }
 
 @Composable
+private fun PastRow(a: Appointment, people: List<com.shawady.bodywise.data.Person>, onDelete: () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        personName(a.personId, people)?.let { Hint("👤 $it") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
+                Hint("${a.at.toLocalDate()} ${a.at.toLocalTime().format12()}" + if (a.reason.isNotBlank()) " • ${a.reason}" else "")
+                if (a.outcome.isNotBlank()) Text("📝 ${a.outcome}", fontSize = 13.sp)
+            }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, "حذف") }
+        }
+    }
+}
+
+/** Full-screen list of every saved doctor, with search and a centered add button. */
+@Composable
+private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    var doctorEditor by remember { mutableStateOf<Doctor?>(null) }
+    var addingDoctor by remember { mutableStateOf(false) }
+    var booking by remember { mutableStateOf(false) }
+    var bookDoctor by remember { mutableStateOf<Doctor?>(null) }
+    val shown = vm.doctors.filter { matchesDoctor(it, query) }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "إغلاق") }
+                        Text("📒 كاتلوج الدكاترة", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    }
+                    OutlinedTextField(
+                        query, { query = it }, singleLine = true, placeholder = { Text("ابحث بالاسم أو التخصص أو العيادة") },
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    )
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 110.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (vm.doctors.isEmpty()) {
+                            Hint("لسه ما سجلتش أي دكتور. اضغط \"دكتور جديد\" وسجّل اسمه ورقمه، وبضغطة واحدة تتصل بيه.")
+                        } else if (shown.isEmpty()) {
+                            Hint("مفيش دكتور مطابق للبحث.")
+                        }
+                        shown.forEach { d ->
+                            AppCard {
+                                DoctorCard(
+                                    d, nextAppointmentFor(d, vm.appointments, now), now,
+                                    onCall = { Context_start(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${dialNumber(d.phone)}")), vm, "تعذر فتح الاتصال") },
+                                    onWhatsapp = { Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${whatsappNumber(d.phone)}")), vm, "تعذر فتح واتساب") },
+                                    onBook = { bookDoctor = d; booking = true },
+                                    onEdit = { doctorEditor = d },
+                                    onDelete = { vm.deleteDoctor(d) }
+                                )
+                            }
+                        }
+                    }
+                }
+                ExtendedFloatingActionButton(
+                    onClick = { addingDoctor = true },
+                    icon = { Icon(Icons.Default.Add, null) },
+                    text = { Text("دكتور جديد") },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
+                )
+            }
+        }
+    }
+    if (addingDoctor || doctorEditor != null) {
+        DoctorDialog(doctorEditor, onDismiss = { addingDoctor = false; doctorEditor = null }, onSave = { vm.saveDoctor(it); addingDoctor = false; doctorEditor = null })
+    }
+    if (booking) {
+        AppointmentDialog(vm, null, bookDoctor, null, onDismiss = { booking = false; bookDoctor = null }, onSave = { vm.saveAppointment(it); booking = false; bookDoctor = null })
+    }
+}
+
+@Composable
 private fun ApptRow(a: Appointment, now: LocalDateTime, onEdit: () -> Unit, onDone: () -> Unit, onDelete: () -> Unit, overdue: Boolean = false) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -198,7 +299,8 @@ private fun ApptRow(a: Appointment, now: LocalDateTime, onEdit: () -> Unit, onDo
 
 @Composable
 private fun DoctorCard(
-    d: Doctor, onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
+    d: Doctor, next: Appointment?, now: LocalDateTime,
+    onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -211,6 +313,7 @@ private fun DoctorCard(
         }
         if (d.clinic.isNotBlank() || d.address.isNotBlank()) Hint("📍 " + listOf(d.clinic, d.address).filter { it.isNotBlank() }.joinToString(" - "))
         if (d.notes.isNotBlank()) Hint("📝 ${d.notes}")
+        if (next != null) Text("📅 موعدك الجاي: ${apptWhen(next.at, now)}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
         if (d.phone.isNotBlank()) {
             Button(onClick = onCall, modifier = Modifier.fillMaxWidth()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

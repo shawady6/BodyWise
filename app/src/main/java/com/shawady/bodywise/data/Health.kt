@@ -147,3 +147,20 @@ fun overdueVitals(vitals: List<VitalReading>, now: LocalDateTime): Map<VitalType
     }
     return result
 }
+
+/** Search over every field a person might remember about a visit. */
+fun matchesAppointment(a: Appointment, query: String, people: List<Person>): Boolean {
+    val q = query.trim()
+    if (q.isEmpty()) return true
+    return listOf(a.doctorName, a.reason, a.outcome, personName(a.personId, people) ?: "").any { it.contains(q, ignoreCase = true) }
+}
+
+fun matchesDoctor(d: Doctor, query: String): Boolean {
+    val q = query.trim()
+    if (q.isEmpty()) return true
+    return listOf(d.name, d.specialty, d.clinic).any { it.contains(q, ignoreCase = true) }
+}
+
+/** The soonest not-yet-done appointment with this doctor (matched by id, or by name when the card was typed by hand). */
+fun nextAppointmentFor(doctor: Doctor, list: List<Appointment>, now: LocalDateTime): Appointment? =
+    upcomingAppointments(list, now).firstOrNull { it.doctorId == doctor.id || (it.doctorId == null && it.doctorName == doctor.name) }
