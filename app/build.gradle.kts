@@ -28,8 +28,8 @@ android {
         applicationId = "com.shawady.bodywise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.11.4"
+        versionCode = 29
+        versionName = "0.12.0"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
