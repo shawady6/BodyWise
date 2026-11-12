@@ -220,3 +220,26 @@ fun PersonPicker(label: String, people: List<com.shawady.bodywise.data.Person>, 
         }
     }
 }
+
+
+/** Optional "who prescribed / wrote it" chooser built from the doctor catalog; null means none. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun DoctorPicker(label: String, doctors: List<com.shawady.bodywise.data.Doctor>, selectedId: String?, onSelect: (com.shawady.bodywise.data.Doctor?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (doctors.isEmpty()) {
+            Text("ضيف الدكتور من \"كاتلوج الدكاترة\" الأول علشان تقدر تربطه.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.FilterChip(selected = selectedId == null, onClick = { onSelect(null) }, label = { Text("بدون") })
+                doctors.forEach { d ->
+                    androidx.compose.material3.FilterChip(
+                        selected = selectedId == d.id, onClick = { onSelect(d) },
+                        label = { Text(d.name + if (d.specialty.isNotBlank()) " • ${d.specialty}" else "") }
+                    )
+                }
+            }
+        }
+    }
+}

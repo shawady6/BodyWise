@@ -81,8 +81,27 @@ class HealthTest {
         val p = MedicalProfile("O+", "بنسلين", "ضغط", "ماما", "0102", "")
         assertEquals(p, SnapshotJson.profileFromJson(JSONObject(SnapshotJson.profileToJson(p).toString())))
         assertTrue(MedicalProfile().isEmpty())
-        val md = MedicalDoc("x", LocalDate.of(2026, 11, 1), "تحليل", "سكر", "د. أحمد", "med_1.jpg")
+        val md = MedicalDoc("x", LocalDate.of(2026, 11, 1), "تحليل", "سكر", "د. أحمد", listOf("med_1.jpg", "med_pdf_1_x.pdf"), "d1")
         assertEquals(listOf(md), SnapshotJson.docsFromJson(JSONArray(SnapshotJson.docsToJson(listOf(md)).toString())))
+    }
+
+    @Test fun oldSinglePhotoDocMigrates() {
+        val old = JSONArray("[{\"id\":\"x\",\"date\":\"2026-11-01\",\"kind\":\"تحليل\",\"title\":\"سكر\",\"doctor\":\"د\",\"photo\":\"med_9.jpg\"}]")
+        val d = SnapshotJson.docsFromJson(old).first()
+        assertEquals(listOf("med_9.jpg"), d.files)
+        assertNull(d.doctorId)
+    }
+
+    @Test fun pdfHelpers() {
+        assertTrue(isPdfFile("med_pdf_123_report.pdf"))
+        assertFalse(isPdfFile("med_1.jpg"))
+        assertEquals("report.pdf", pdfDisplayName("med_pdf_123_report.pdf"))
+    }
+
+    @Test fun doctorLinks() {
+        val d = Doctor("d1", "أحمد")
+        val md = MedicalDoc("x", LocalDate.of(2026, 11, 1), "تحليل", "سكر", doctorId = "d1")
+        assertEquals(listOf(md), docsOfDoctor(d, listOf(md, md.copy(id = "y", doctorId = null))))
     }
 
     @Test fun backupKeepsHealthData() {

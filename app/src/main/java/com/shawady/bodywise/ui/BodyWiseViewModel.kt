@@ -284,6 +284,42 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Copies a PDF into app storage (max [com.shawady.bodywise.data.MAX_PDF_BYTES]); [onDone] gets the stored name or null. */
+    fun importDocPdf(open: () -> InputStream?, originalName: String, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val stem = com.shawady.bodywise.data.safeFileStem(originalName).ifBlank { "ملف" }
+            val dest = File(store.photosDir, "med_pdf_${System.currentTimeMillis()}_$stem.pdf")
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val limit = com.shawady.bodywise.data.MAX_PDF_BYTES
+                    var copied = 0L
+                    val input = open() ?: return@runCatching "fail"
+                    input.use { source ->
+                        dest.outputStream().use { out ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = source.read(buffer)
+                                if (read < 0) break
+                                copied += read
+                                if (copied > limit) return@runCatching "big"
+                                out.write(buffer, 0, read)
+                            }
+                        }
+                    }
+                    // A real PDF starts with "%PDF".
+                    val header = dest.inputStream().use { ins -> ByteArray(4).also { ins.read(it) } }
+                    if (String(header, Charsets.ISO_8859_1) != "%PDF") "notpdf" else "ok"
+                }.getOrDefault("fail").also { if (it != "ok") dest.delete() }
+            }
+            when (result) {
+                "big" -> toast = "الملف أكبر من 25 ميجا"
+                "notpdf" -> toast = "الملف ده مش PDF"
+                "fail" -> toast = "تعذر حفظ الملف"
+            }
+            onDone(if (result == "ok") dest.name else null)
+        }
+    }
+
     fun medPhotoFile(name: String): File = File(store.photosDir, name)
     fun deleteStrayFile(name: String) { File(store.photosDir, name).delete() }
 
@@ -331,7 +367,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     fun saveDoc(d: com.shawady.bodywise.data.MedicalDoc) {
         val old = medDocs.firstOrNull { it.id == d.id }
         healthStore.upsertDoc(d)
-        if (old?.photo != null && old.photo != d.photo) File(store.photosDir, old.photo).delete()
+        old?.files?.filter { it !in d.files }?.forEach { File(store.photosDir, it).delete() }
         reloadHealth()
     }
 
@@ -340,7 +376,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
         reloadHealth()
         offerUndo(UndoRequest("اتحذف المستند ${d.title}",
             undo = { healthStore.upsertDoc(d); reloadHealth() },
-            commit = { d.photo?.let { File(store.photosDir, it).delete() } }))
+            commit = { d.files.forEach { File(store.photosDir, it).delete() } }))
     }
 
     // ---- People I look after ----
@@ -477,7 +513,7 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
             result.onSuccess { restored ->
                 undoRequest?.commit?.invoke()
                 undoRequest = null
-                val oldFiles = photos.map { it.file } + medications.mapNotNull { it.photo } + medDocs.mapNotNull { it.photo }
+                val oldFiles = photos.map { it.file } + medications.mapNotNull { it.photo } + medDocs.flatMap { it.files }
                 apply(restored)
                 persist()
                 medStore.replaceAll(restored.medications, restored.doseLogs)

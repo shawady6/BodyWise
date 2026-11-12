@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import com.shawady.bodywise.data.Appointment
 import com.shawady.bodywise.data.Doctor
 import com.shawady.bodywise.data.dialNumber
+import com.shawady.bodywise.data.docsOfDoctor
+import com.shawady.bodywise.data.medsOfDoctor
 import com.shawady.bodywise.data.groupByPerson
 import com.shawady.bodywise.data.personName
 import com.shawady.bodywise.ui.components.PersonHeader
@@ -258,6 +260,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                             AppCard {
                                 DoctorCard(
                                     d, nextAppointmentFor(d, vm.appointments, now), now,
+                                    medCount = medsOfDoctor(d, vm.medications).size, docCount = docsOfDoctor(d, vm.medDocs).size,
                                     onCall = { Context_start(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${dialNumber(d.phone)}")), vm, "تعذر فتح الاتصال") },
                                     onWhatsapp = { Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${whatsappNumber(d.phone)}")), vm, "تعذر فتح واتساب") },
                                     onBook = { bookDoctor = d; booking = true },
@@ -304,7 +307,7 @@ private fun ApptRow(a: Appointment, now: LocalDateTime, onEdit: () -> Unit, onDo
 
 @Composable
 private fun DoctorCard(
-    d: Doctor, next: Appointment?, now: LocalDateTime,
+    d: Doctor, next: Appointment?, now: LocalDateTime, medCount: Int, docCount: Int,
     onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -318,6 +321,7 @@ private fun DoctorCard(
         }
         if (d.clinic.isNotBlank() || d.address.isNotBlank()) Hint("📍 " + listOf(d.clinic, d.address).filter { it.isNotBlank() }.joinToString(" - "))
         if (d.notes.isNotBlank()) Hint("📝 ${d.notes}")
+        if (medCount > 0 || docCount > 0) Hint("💊 $medCount أدوية • 📂 $docCount مستندات")
         if (next != null) Text("📅 موعدك الجاي: ${apptWhen(next.at, now)}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
         if (d.phone.isNotBlank()) {
             Button(onClick = onCall, modifier = Modifier.fillMaxWidth()) {

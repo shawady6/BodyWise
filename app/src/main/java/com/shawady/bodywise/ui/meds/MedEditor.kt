@@ -70,6 +70,7 @@ import com.shawady.bodywise.data.STRIP_UNITS
 import com.shawady.bodywise.data.suggestTimes
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.Hint
+import com.shawady.bodywise.ui.components.DoctorPicker
 import com.shawady.bodywise.ui.components.PersonPicker
 import com.shawady.bodywise.ui.components.PhotoThumb
 import com.shawady.bodywise.ui.theme.Status
@@ -124,6 +125,7 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
     }
     var boxes by remember { mutableStateOf(initialBoxes) }
     var personId by remember { mutableStateOf(initial?.personId) }
+    var doctorId by remember { mutableStateOf(initial?.doctorId) }
     var photo by remember { mutableStateOf(initial?.photo) }
     var newPhoto by remember { mutableStateOf<String?>(null) }
     var pendingCamera by remember { mutableStateOf<File?>(null) }
@@ -211,7 +213,8 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                 stripsPerBox = if (isStrip) stripsN else null,
                 unitsPerStrip = if (isStrip) perStripN else null,
                 unitsPerBox = perBox, fullQuantity = full, price = priceN,
-                personId = personId?.takeIf { id -> vm.people.any { it.id == id } }
+                personId = personId?.takeIf { id -> vm.people.any { it.id == id } },
+                doctorId = doctorId?.takeIf { id -> vm.doctors.any { it.id == id } }
             )
         )
     }
@@ -273,6 +276,9 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                             }
                             if (vm.settings.careEnabled && vm.people.isNotEmpty()) {
                                 PersonPicker("الدواء لـ", vm.people, personId) { personId = it }
+                            }
+                            if (vm.doctors.isNotEmpty()) {
+                                DoctorPicker("الدكتور اللي كتبه (اختياري)", vm.doctors, doctorId) { doctorId = it?.id }
                             }
                             OutlinedTextField(
                                 name, { name = it; nameError = null }, label = { Text("اسم الدواء") }, singleLine = true,

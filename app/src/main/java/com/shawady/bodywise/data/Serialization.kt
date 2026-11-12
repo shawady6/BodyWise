@@ -11,7 +11,7 @@ import java.util.UUID
 /** JSON shapes are kept compatible with earlier app versions (v0.1 – v0.2). */
 object SnapshotJson {
     const val FORMAT = "bodywise-backup"
-    const val VERSION = 7
+    const val VERSION = 8
 
     fun mealsToJson(meals: Map<String, List<FoodEntry>>): JSONObject {
         val json = JSONObject()
@@ -151,7 +151,8 @@ object SnapshotJson {
                 .put("unitsPerBox", m.unitsPerBox?.let { formatNumber(it) } ?: "")
                 .put("fullQuantity", m.fullQuantity?.let { formatNumber(it) } ?: "")
                 .put("price", m.price?.let { formatNumber(it) } ?: "")
-                .put("person", m.personId ?: ""))
+                .put("person", m.personId ?: "")
+                .put("doctor", m.doctorId ?: ""))
         }
         return array
     }
@@ -179,7 +180,8 @@ object SnapshotJson {
             unitsPerBox = parseDecimal(item.optString("unitsPerBox")),
             fullQuantity = parseDecimal(item.optString("fullQuantity")),
             price = parseDecimal(item.optString("price")),
-            personId = item.optString("person").ifBlank { null }
+            personId = item.optString("person").ifBlank { null },
+            doctorId = item.optString("doctor").ifBlank { null }
         )
     }
 
@@ -253,11 +255,19 @@ object SnapshotJson {
         o.optString("emergencyName"), o.optString("emergencyPhone"), o.optString("notes")
     )
 
+    /** Reads the file list; older backups stored a single "photo". */
+    private fun docFilesFrom(o: JSONObject): List<String> {
+        val array = o.optJSONArray("files")
+        if (array != null) return List(array.length()) { array.getString(it) }.filter { it.isNotBlank() }
+        return listOfNotNull(o.optString("photo").ifBlank { null })
+    }
+
     fun docsToJson(list: List<MedicalDoc>): JSONArray {
         val array = JSONArray()
         list.forEach { d ->
             array.put(JSONObject().put("id", d.id).put("date", d.date.toString()).put("kind", d.kind).put("title", d.title)
-                .put("doctorName", d.doctorName).put("photo", d.photo ?: ""))
+                .put("doctorName", d.doctorName).put("doctorId", d.doctorId ?: "")
+                .put("files", JSONArray().also { arr -> d.files.forEach { arr.put(it) } }))
         }
         return array
     }
@@ -265,7 +275,7 @@ object SnapshotJson {
     fun docsFromJson(array: JSONArray): List<MedicalDoc> = List(array.length()) { i ->
         val o = array.getJSONObject(i)
         MedicalDoc(o.getString("id"), LocalDate.parse(o.getString("date")), o.optString("kind", "أخرى"), o.optString("title"),
-            o.optString("doctorName"), o.optString("photo").ifBlank { null })
+            o.optString("doctorName"), docFilesFrom(o), o.optString("doctorId").ifBlank { null })
     }
 
     fun toBackup(snapshot: Snapshot, exportedAt: LocalDate): JSONObject = JSONObject()

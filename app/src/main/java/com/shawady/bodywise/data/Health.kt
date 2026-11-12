@@ -71,15 +71,39 @@ data class MedicalProfile(
 val BLOOD_TYPES = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 val DOC_KINDS = listOf("روشتة", "تحليل", "أشعة", "تقرير", "أخرى")
 
-/** A photographed prescription, lab result, scan or report. */
+const val MAX_DOC_FILES = 10
+const val MAX_PDF_BYTES = 25L * 1024 * 1024
+
+/** A prescription, lab result, scan or report: up to [MAX_DOC_FILES] photos and PDF files. */
 data class MedicalDoc(
     val id: String,
     val date: LocalDate,
     val kind: String,
     val title: String,
     val doctorName: String = "",
-    val photo: String? = null
+    val files: List<String> = emptyList(),
+    /** Link to a doctor card; [doctorName] is kept so the document still reads well if the card is deleted. */
+    val doctorId: String? = null
 )
+
+fun isPdfFile(name: String): Boolean = name.endsWith(".pdf", ignoreCase = true)
+
+/** Display name of a stored PDF ("med_pdf_<time>_<original>.pdf" -> original). */
+fun pdfDisplayName(name: String): String {
+    val core = name.removeSuffix(".pdf").removeSuffix(".PDF")
+    val original = core.removePrefix("med_pdf_").substringAfter('_', "").replace('_', ' ').trim()
+    return (original.ifBlank { "ملف" }) + ".pdf"
+}
+
+/** Letters, digits, dash and underscore only, so the stored file name is always safe. */
+fun safeFileStem(original: String, max: Int = 40): String =
+    original.substringBeforeLast('.').map { if (it.isLetterOrDigit() || it == '-') it else '_' }.joinToString("").trim('_').take(max)
+
+/** Documents of one doctor: linked by id, or typed by name when there was no card. */
+fun docsOfDoctor(doctor: Doctor, docs: List<MedicalDoc>): List<MedicalDoc> =
+    docs.filter { it.doctorId == doctor.id || (it.doctorId == null && it.doctorName.isNotBlank() && it.doctorName == doctor.name) }
+
+fun medsOfDoctor(doctor: Doctor, meds: List<Medication>): List<Medication> = meds.filter { it.doctorId == doctor.id }
 
 enum class ApptReminder(val label: String) { EVENING_BEFORE("الليلة اللي قبله"), TWO_HOURS("قبله بساعتين"), QUARTER("قبله بربع ساعة") }
 

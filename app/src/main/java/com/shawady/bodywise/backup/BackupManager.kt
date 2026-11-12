@@ -2,6 +2,8 @@ package com.shawady.bodywise.backup
 
 import com.shawady.bodywise.data.ProgressPhoto
 import com.shawady.bodywise.data.Snapshot
+import com.shawady.bodywise.data.isPdfFile
+import com.shawady.bodywise.data.pdfDisplayName
 import com.shawady.bodywise.data.SnapshotJson
 import org.json.JSONObject
 import java.io.File
@@ -41,8 +43,7 @@ object BackupManager {
                     zip.closeEntry()
                 }
             }
-            snapshot.medDocs.forEach { doc ->
-                val name = doc.photo?.let { File(it).name } ?: return@forEach
+            snapshot.medDocs.flatMap { it.files }.map { File(it).name }.distinct().forEach { name ->
                 val file = File(photosDir, name)
                 if (file.isFile) {
                     zip.putNextEntry(ZipEntry("docphotos/$name"))
@@ -107,14 +108,18 @@ object BackupManager {
                 } else med.copy(photo = null)
             }
             val docs = parsed.medDocs.mapIndexed { index, doc ->
-                val source = doc.photo?.let { File(File(temp, "docphotos"), File(it).name) }
-                if (source != null && source.isFile) {
-                    val newName = "med_doc_restored_${System.currentTimeMillis()}_$index.jpg"
+                val restored = doc.files.mapIndexedNotNull { n, fileName ->
+                    val source = File(File(temp, "docphotos"), File(fileName).name)
+                    if (!source.isFile) return@mapIndexedNotNull null
+                    val extension = if (isPdfFile(fileName)) "pdf" else "jpg"
+                    val newName = if (extension == "pdf") "med_pdf_${System.currentTimeMillis()}${index}${n}_" + pdfDisplayName(fileName).removeSuffix(".pdf").replace(' ', '_') + ".pdf"
+                    else "med_doc_restored_${System.currentTimeMillis()}_${index}_$n.jpg"
                     val target = File(photosDir, newName)
                     source.copyTo(target, overwrite = true)
                     copied.add(target)
-                    doc.copy(photo = newName)
-                } else doc.copy(photo = null)
+                    newName
+                }
+                doc.copy(files = restored)
             }
             return parsed.copy(photos = photos, medications = meds, medDocs = docs)
         } catch (error: Exception) {

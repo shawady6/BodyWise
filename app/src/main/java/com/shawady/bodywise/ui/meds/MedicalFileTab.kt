@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -43,12 +43,15 @@ import com.shawady.bodywise.data.BLOOD_TYPES
 import com.shawady.bodywise.data.DOC_KINDS
 import com.shawady.bodywise.data.MedicalDoc
 import com.shawady.bodywise.data.MedicalProfile
+import com.shawady.bodywise.data.MAX_DOC_FILES
 import com.shawady.bodywise.data.dialNumber
+import com.shawady.bodywise.data.isPdfFile
+import com.shawady.bodywise.data.pdfDisplayName
 import com.shawady.bodywise.ui.BodyWiseViewModel
 import com.shawady.bodywise.ui.components.AppCard
 import com.shawady.bodywise.ui.components.DatePickDialog
 import com.shawady.bodywise.ui.components.Hint
-import com.shawady.bodywise.ui.components.PhotoThumb
+import com.shawady.bodywise.ui.components.DoctorPicker
 import com.shawady.bodywise.ui.components.SectionTitle
 import java.io.File
 import java.time.LocalDate
@@ -60,7 +63,8 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
     var editingProfile by remember { mutableStateOf(false) }
     var docEditor by remember { mutableStateOf<MedicalDoc?>(null) }
     var addingDoc by remember { mutableStateOf(false) }
-    var viewing by remember { mutableStateOf<MedicalDoc?>(null) }
+    var viewing by remember { mutableStateOf<Pair<MedicalDoc, Int>?>(null) }
+    var doctorFilter by remember { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf<String?>(null) }
     val p = vm.medProfile
 
@@ -90,21 +94,26 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
             FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("الكل") })
             DOC_KINDS.forEach { k -> FilterChip(selected = filter == k, onClick = { filter = if (filter == k) null else k }, label = { Text(k) }) }
         }
-        val shown = vm.medDocs.filter { filter == null || it.kind == filter }
+        val docDoctors = vm.doctors.filter { d -> vm.medDocs.any { it.doctorId == d.id } }
+        if (docDoctors.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                docDoctors.forEach { d -> FilterChip(selected = doctorFilter == d.id, onClick = { doctorFilter = if (doctorFilter == d.id) null else d.id }, label = { Text("👨‍⚕️ ${d.name}") }) }
+            }
+        }
+        val shown = vm.medDocs.filter { (filter == null || it.kind == filter) && (doctorFilter == null || it.doctorId == doctorFilter) }
         if (shown.isEmpty()) Hint("صوّر الروشتة أو التحليل وهتتحفظ هنا بتاريخها، بدل ما تدوّر في الصور.")
         shown.forEach { d ->
+            val doctorLabel = vm.doctors.firstOrNull { it.id == d.doctorId }?.name ?: d.doctorName
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("${d.kind} • ${d.title.ifBlank { "بدون عنوان" }}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Hint(d.date.toString() + if (d.doctorName.isNotBlank()) " • ${d.doctorName}" else "")
+                        Hint(d.date.toString() + if (doctorLabel.isNotBlank()) " • $doctorLabel" else "")
                     }
                     IconButton(onClick = { docEditor = d }) { Icon(Icons.Default.Edit, "تعديل") }
                     IconButton(onClick = { vm.deleteDoc(d) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
                 }
-                d.photo?.let { name ->
-                    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().clickableNoRipple { viewing = d }) { PhotoThumb(vm.medPhotoFile(name), height = 110) }
-                }
+                if (d.files.isNotEmpty()) DocFilesStrip(vm, d.files) { i -> viewing = d to i }
             }
         }
         Button(onClick = { addingDoc = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Add, null); Text("  أضف مستند") }
@@ -114,17 +123,8 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
     if (addingDoc || docEditor != null) {
         DocDialog(vm, docEditor, onDismiss = { addingDoc = false; docEditor = null }, onSave = { vm.saveDoc(it); addingDoc = false; docEditor = null })
     }
-    viewing?.let { d ->
-        AlertDialog(
-            onDismissRequest = { viewing = null },
-            confirmButton = { TextButton(onClick = { viewing = null }) { Text("إغلاق") } },
-            title = { Text(d.title.ifBlank { d.kind }) },
-            text = { d.photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 420) } }
-        )
-    }
+    viewing?.let { (d, i) -> DocViewer(vm, d, i) { viewing = null } }
 }
-
-private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = this.clickable(onClick = onClick)
 
 @Composable
 private fun ProfileLine(label: String, value: String) {
@@ -173,25 +173,47 @@ private fun DocDialog(vm: BodyWiseViewModel, initial: MedicalDoc?, onDismiss: ()
     val context = LocalContext.current
     var kind by remember { mutableStateOf(initial?.kind ?: DOC_KINDS.first()) }
     var title by remember { mutableStateOf(initial?.title ?: "") }
-    var doctor by remember { mutableStateOf(initial?.doctorName ?: "") }
+    var doctorId by remember { mutableStateOf(initial?.doctorId?.takeIf { id -> vm.doctors.any { it.id == id } }) }
+    var doctorName by remember { mutableStateOf(initial?.doctorName ?: "") }
     var date by remember { mutableStateOf(initial?.date ?: LocalDate.now()) }
-    var photo by remember { mutableStateOf(initial?.photo) }
-    var newPhoto by remember { mutableStateOf<String?>(null) }
+    var files by remember { mutableStateOf(initial?.files ?: emptyList()) }
+    var added by remember { mutableStateOf(listOf<String>()) }
     var pendingCamera by remember { mutableStateOf<File?>(null) }
     var showDate by remember { mutableStateOf(false) }
 
     fun accept(saved: String?) {
-        if (saved != null) { newPhoto?.let { vm.deleteStrayFile(it) }; newPhoto = saved; photo = saved }
+        if (saved == null) return
+        if (files.size >= MAX_DOC_FILES) { vm.deleteStrayFile(saved); vm.toast = "أقصى عدد $MAX_DOC_FILES ملفات"; return }
+        files = files + saved
+        added = added + saved
+    }
+    fun remove(name: String) {
+        files = files - name
+        if (name in added) { vm.deleteStrayFile(name); added = added - name }
+    }
+    fun room(): Boolean {
+        if (files.size >= MAX_DOC_FILES) { vm.toast = "أقصى عدد $MAX_DOC_FILES ملفات"; return false }
+        return true
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val file = pendingCamera
         pendingCamera = null
         if (ok && file != null && file.exists()) vm.importMedPhoto({ file.inputStream() }) { saved -> file.delete(); accept(saved) }
     }
-    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) vm.importMedPhoto({ context.contentResolver.openInputStream(uri) }) { accept(it) }
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        uris.forEach { uri -> vm.importMedPhoto({ context.contentResolver.openInputStream(uri) }) { accept(it) } }
     }
-    fun dismiss() { newPhoto?.let { vm.deleteStrayFile(it) }; onDismiss() }
+    val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            val original = runCatching {
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getString(0) else null
+                }
+            }.getOrNull() ?: "document"
+            vm.importDocPdf({ context.contentResolver.openInputStream(uri) }, original) { accept(it) }
+        }
+    }
+    fun dismiss() { added.forEach { vm.deleteStrayFile(it) }; onDismiss() }
 
     AlertDialog(
         onDismissRequest = { dismiss() },
@@ -206,26 +228,43 @@ private fun DocDialog(vm: BodyWiseViewModel, initial: MedicalDoc?, onDismiss: ()
                     }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text("عنوان (مثلًا: تحليل سكر تراكمي)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(doctor, { doctor = it }, label = { Text("الدكتور (اختياري)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (vm.doctors.isNotEmpty()) {
+                    DoctorPicker("الدكتور (اختياري)", vm.doctors, doctorId) { d -> doctorId = d?.id; doctorName = d?.name ?: "" }
+                } else {
+                    OutlinedTextField(doctorName, { doctorName = it }, label = { Text("الدكتور (اختياري)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 OutlinedButton(onClick = { showDate = true }, modifier = Modifier.fillMaxWidth()) { Text("التاريخ: $date") }
-                photo?.let { PhotoThumb(vm.medPhotoFile(it), height = 140) }
+                if (files.isNotEmpty()) {
+                    Hint("الملفات (${files.size}/$MAX_DOC_FILES) — اضغط ✕ علشان تشيل ملف")
+                    files.forEach { name ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (isPdfFile(name)) Text("📄 ${pdfDisplayName(name)}", Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
+                            else androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                                com.shawady.bodywise.ui.components.PhotoThumb(vm.medPhotoFile(name), height = 90)
+                            }
+                            IconButton(onClick = { remove(name) }) { Icon(Icons.Default.Close, "شيل") }
+                        }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
+                        if (!room()) return@OutlinedButton
                         runCatching {
                             val file = File(context.cacheDir, "doc_capture_${System.currentTimeMillis()}.jpg")
                             pendingCamera = file
                             camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
                         }.onFailure { vm.toast = "تعذر فتح الكاميرا" }
                     }, modifier = Modifier.weight(1f)) { Text("📷 صوّر") }
-                    OutlinedButton(onClick = { gallery.launch("image/*") }, modifier = Modifier.weight(1f)) { Text("🖼 من المعرض") }
+                    OutlinedButton(onClick = { if (room()) gallery.launch("image/*") }, modifier = Modifier.weight(1f)) { Text("🖼 معرض") }
+                    OutlinedButton(onClick = { if (room()) pdfPicker.launch("application/pdf") }, modifier = Modifier.weight(1f)) { Text("📄 PDF") }
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                if (photo == null && title.isBlank()) { vm.toast = "اكتب عنوان أو أضف صورة"; return@TextButton }
-                newPhoto = null
-                onSave(MedicalDoc(initial?.id ?: UUID.randomUUID().toString(), date, kind, title.trim(), doctor.trim(), photo))
+                if (files.isEmpty() && title.isBlank()) { vm.toast = "اكتب عنوان أو أضف ملف"; return@TextButton }
+                added = emptyList()
+                onSave(MedicalDoc(initial?.id ?: UUID.randomUUID().toString(), date, kind, title.trim(), doctorName.trim(), files, doctorId))
             }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = { dismiss() }) { Text("إلغاء") } }

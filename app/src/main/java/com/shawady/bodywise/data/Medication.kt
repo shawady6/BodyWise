@@ -36,7 +36,9 @@ data class Medication(
     /** Price of one box. */
     val price: Double? = null,
     /** null = the app owner. */
-    val personId: String? = null
+    val personId: String? = null,
+    /** The doctor who prescribed it (a card in the catalog), optional. */
+    val doctorId: String? = null
 )
 
 data class DoseLog(

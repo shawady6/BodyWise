@@ -372,6 +372,7 @@ private fun MedCard(vm: BodyWiseViewModel, med: Medication, onEdit: (Medication)
                 }
             }
         }
+        vm.doctors.firstOrNull { it.id == med.doctorId }?.let { Hint("👨‍⚕️ ${it.name}") }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
             med.times.forEach { TimeChip(it.format12()) }
         }
