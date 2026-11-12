@@ -76,7 +76,7 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
             }
         }
         if (p.isEmpty()) Hint("اكتب فصيلة دمك والحساسية والأمراض المزمنة وجهة الطوارئ، علشان تلاقيهم في ثانية.")
-        ProfileLine("🩸 فصيلة الدم", p.bloodType)
+        ProfileLine("🩸 فصيلة الدم", if (p.bloodType.isBlank()) "" else ltr(p.bloodType))
         ProfileLine("⚠️ الحساسية", p.allergies)
         ProfileLine("🏥 أمراض مزمنة", p.conditions)
         ProfileLine("📝 ملاحظات", p.notes)
@@ -126,6 +126,9 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
     viewing?.let { (d, i) -> DocViewer(vm, d, i) { viewing = null } }
 }
 
+/** Keeps Latin text like "A+" in its own left-to-right run so the + doesn't jump to the wrong side in RTL. */
+private fun ltr(text: String): String = "\u2066$text\u2069"
+
 @Composable
 private fun ProfileLine(label: String, value: String) {
     if (value.isBlank()) return
@@ -152,7 +155,7 @@ private fun ProfileDialog(initial: MedicalProfile, onDismiss: () -> Unit, onSave
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     BLOOD_TYPES.chunked(4).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { t -> FilterChip(selected = blood == t, onClick = { blood = if (blood == t) "" else t }, label = { Text(t) }) }
+                            row.forEach { t -> FilterChip(selected = blood == t, onClick = { blood = if (blood == t) "" else t }, label = { Text(ltr(t), fontWeight = FontWeight.Bold) }) }
                         }
                     }
                 }
