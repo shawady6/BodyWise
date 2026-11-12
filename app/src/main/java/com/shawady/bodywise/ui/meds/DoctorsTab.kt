@@ -232,6 +232,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
     var addingDoctor by remember { mutableStateOf(false) }
     var booking by remember { mutableStateOf(false) }
     var bookDoctor by remember { mutableStateOf<Doctor?>(null) }
+    var docsDoctor by remember { mutableStateOf<Doctor?>(null) }
     val shown = vm.doctors.filter { matchesDoctor(it, query) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -264,6 +265,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                                     onCall = { Context_start(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:${dialNumber(d.phone)}")), vm, "تعذر فتح الاتصال") },
                                     onWhatsapp = { Context_start(context, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${whatsappNumber(d.phone)}")), vm, "تعذر فتح واتساب") },
                                     onBook = { bookDoctor = d; booking = true },
+                                    onDocs = { docsDoctor = d },
                                     onEdit = { doctorEditor = d },
                                     onDelete = { vm.deleteDoctor(d) }
                                 )
@@ -284,6 +286,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
     if (addingDoctor || doctorEditor != null) {
         DoctorDialog(doctorEditor, onDismiss = { addingDoctor = false; doctorEditor = null }, onSave = { vm.saveDoctor(it); addingDoctor = false; doctorEditor = null })
     }
+    docsDoctor?.let { d -> DoctorDocsDialog(vm, d) { docsDoctor = null } }
     if (booking) {
         AppointmentDialog(vm, null, bookDoctor, null, onDismiss = { booking = false; bookDoctor = null }, onSave = { vm.saveAppointment(it); booking = false; bookDoctor = null })
     }
@@ -308,7 +311,7 @@ private fun ApptRow(a: Appointment, now: LocalDateTime, onEdit: () -> Unit, onDo
 @Composable
 private fun DoctorCard(
     d: Doctor, next: Appointment?, now: LocalDateTime, medCount: Int, docCount: Int,
-    onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
+    onCall: () -> Unit, onWhatsapp: () -> Unit, onBook: () -> Unit, onDocs: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -336,6 +339,9 @@ private fun DoctorCard(
                 OutlinedButton(onClick = onWhatsapp, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("💬 واتساب", maxLines = 1, softWrap = false, fontSize = 14.sp) }
             }
             OutlinedButton(onClick = onBook, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("📅 احجز موعد", maxLines = 1, softWrap = false, fontSize = 14.sp) }
+        }
+        if (docCount > 0) {
+            OutlinedButton(onClick = onDocs, modifier = Modifier.fillMaxWidth()) { Text("📂 مستنداته ($docCount)", fontSize = 14.sp) }
         }
     }
 }
@@ -441,4 +447,29 @@ private fun FinishDialog(a: Appointment, onDismiss: () -> Unit, onSave: (String,
             }
         }
     )
+}
+
+/** Every document linked to one doctor, with previews that open the viewer or the PDF app. */
+@Composable
+private fun DoctorDocsDialog(vm: BodyWiseViewModel, doctor: Doctor, onDismiss: () -> Unit) {
+    var viewing by remember { mutableStateOf<Pair<com.shawady.bodywise.data.MedicalDoc, Int>?>(null) }
+    val docs = docsOfDoctor(doctor, vm.medDocs)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } },
+        title = { Text("📂 مستندات ${doctor.name}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (docs.isEmpty()) Hint("مفيش مستندات.")
+                docs.forEach { d ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${d.kind} • ${d.title.ifBlank { "بدون عنوان" }}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Hint(d.date.toString())
+                        if (d.files.isNotEmpty()) DocFilesStrip(vm, d.files) { i -> viewing = d to i }
+                    }
+                }
+            }
+        }
+    )
+    viewing?.let { (d, i) -> DocViewer(vm, d, i) { viewing = null } }
 }
