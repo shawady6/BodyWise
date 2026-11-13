@@ -50,6 +50,8 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     val vitals = mutableStateListOf<com.shawady.bodywise.data.VitalReading>()
     private val healthStore = com.shawady.bodywise.data.HealthStore(app)
     val doctors = mutableStateListOf<com.shawady.bodywise.data.Doctor>()
+    /** Set by the home screen to open a given sub-tab of "روشتتي" (2 = doctors). */
+    var medsSubRequest by mutableStateOf<Int?>(null)
     val appointments = mutableStateListOf<com.shawady.bodywise.data.Appointment>()
     val medDocs = mutableStateListOf<com.shawady.bodywise.data.MedicalDoc>()
     val people = mutableStateListOf<com.shawady.bodywise.data.Person>()

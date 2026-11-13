@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -118,19 +119,38 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
         }
 
         val nextAppts = upcomingAppointments(vm.appointments, now).take(3)
-        if (nextAppts.isNotEmpty()) {
+        if (vm.doctors.isNotEmpty() || nextAppts.isNotEmpty()) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            fun call(d: com.shawady.bodywise.data.Doctor) {
+                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:${com.shawady.bodywise.data.dialNumber(d.phone)}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    .onFailure { vm.toast = "تعذر فتح الاتصال" }
+            }
             AppCard {
-                SectionTitle("📅", "مواعيدك القادمة")
+                SectionTitle("👨‍⚕️", "دكاترتي")
+                if (nextAppts.isEmpty()) Hint("مفيش مواعيد جاية.")
                 nextAppts.forEach { a ->
                     val day = when (a.at.toLocalDate()) { today -> "النهارده"; today.plusDays(1) -> "بكرة"; else -> a.at.toLocalDate().toString() }
+                    val doctor = com.shawady.bodywise.data.doctorOf(a, vm.doctors)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text((com.shawady.bodywise.data.personName(a.personId, vm.people)?.let { "$it • " } ?: "") + a.doctorName.ifBlank { "دكتور" }, fontWeight = FontWeight.SemiBold)
                             if (a.reason.isNotBlank()) Hint(a.reason)
                         }
                         Text("$day • ${a.at.toLocalTime().format12()}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        if (doctor != null && doctor.phone.isNotBlank()) {
+                            androidx.compose.material3.IconButton(onClick = { call(doctor) }) {
+                                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.Call, "اتصال بـ ${doctor.name}")
+                            }
+                        }
                     }
                 }
+                val quick = com.shawady.bodywise.data.topDoctors(vm.doctors, vm.appointments)
+                if (quick.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        quick.forEach { d -> OutlinedButton(onClick = { call(d) }) { Text("📞 ${d.name}", maxLines = 1) } }
+                    }
+                }
+                OutlinedButton(onClick = { vm.medsSubRequest = 2; onNavigate(4) }, modifier = Modifier.fillMaxWidth()) { Text("المواعيد والكاتلوج") }
             }
         }
 

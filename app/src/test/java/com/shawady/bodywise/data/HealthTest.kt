@@ -224,4 +224,13 @@ class CatalogTest {
         assertEquals("y", nextAppointmentFor(d, listOf(later, sooner, other), now)?.id)
         assertEquals(null, nextAppointmentFor(d, listOf(other, later.copy(done = true)), now))
     }
+
+    @Test fun topDoctorsOrdersByVisitsAndNeedsPhone() {
+        val a = Doctor("a", "أحمد", phone = "0100")
+        val b = Doctor("b", "بسمة", phone = "0111")
+        val c = Doctor("c", "جمال")
+        val visits = listOf(appt.copy(doctorId = "b"), appt.copy(doctorId = "b"), appt.copy(doctorId = "a"))
+        assertEquals(listOf(b, a), topDoctors(listOf(a, b, c), visits))
+        assertEquals(b, doctorOf(visits.first(), listOf(a, b, c)))
+    }
 }

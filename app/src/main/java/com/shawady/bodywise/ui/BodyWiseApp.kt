@@ -154,6 +154,8 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var healthPage by rememberSaveable { mutableIntStateOf(0) }
     var settingsSection by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastMainTab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(tab) { if (tab != 4) lastMainTab = tab }
     var requests by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { updateVm.autoCheck() }
@@ -173,7 +175,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            NavigationBar {
+            if (tab != 4) NavigationBar {
                 NavigationBarItem(tab == 0, { tab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية", fontSize = 11.sp, maxLines = 1) })
                 NavigationBarItem(tab == 1, { tab = 1 }, icon = { Icon(Icons.Default.Restaurant, null) }, label = { Text("غذائي", fontSize = 11.sp, maxLines = 1) })
                 NavigationBarItem(tab == 2, { tab = 2 }, icon = { Icon(Icons.Default.MonitorHeart, null) }, label = { Text("صحتي", fontSize = 11.sp, maxLines = 1) })
@@ -187,7 +189,12 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                     "BodyWise", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.align(Alignment.Center)
                 )
-                IconButton(onClick = { settingsSection = null; tab = if (tab == 4) 0 else 4 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
+                if (tab == 4) {
+                    IconButton(onClick = { tab = lastMainTab }, modifier = Modifier.align(Alignment.CenterStart).size(52.dp)) {
+                        Icon(androidx.compose.material.icons.automirrored.filled.ArrowBack, "رجوع", modifier = Modifier.size(28.dp))
+                    }
+                }
+                IconButton(onClick = { settingsSection = null; tab = if (tab == 4) lastMainTab else 4 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
                     Icon(
                         Icons.Default.Settings, "الإعدادات", modifier = Modifier.size(30.dp),
                         tint = if (tab == 4) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant

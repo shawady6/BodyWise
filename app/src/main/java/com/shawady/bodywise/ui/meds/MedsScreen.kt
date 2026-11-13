@@ -55,6 +55,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -145,6 +146,7 @@ fun MedsScreen(vm: BodyWiseViewModel, onOpenSettings: () -> Unit) {
         while (true) { delay(30_000); value = LocalDateTime.now() }
     }
     var sub by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(vm.medsSubRequest) { vm.medsSubRequest?.let { sub = it; vm.medsSubRequest = null } }
     var editing by remember { mutableStateOf<Medication?>(null) }
     var adding by remember { mutableStateOf(false) }
     var refilling by remember { mutableStateOf<Medication?>(null) }

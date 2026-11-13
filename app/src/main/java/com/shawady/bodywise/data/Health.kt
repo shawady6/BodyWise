@@ -103,6 +103,16 @@ fun safeFileStem(original: String, max: Int = 40): String =
 fun docsOfDoctor(doctor: Doctor, docs: List<MedicalDoc>): List<MedicalDoc> =
     docs.filter { it.doctorId == doctor.id || (it.doctorId == null && it.doctorName.isNotBlank() && it.doctorName == doctor.name) }
 
+/** Doctors with a phone, most-visited first (appointments count, done or not), for one-tap calling. */
+fun topDoctors(doctors: List<Doctor>, appts: List<Appointment>, limit: Int = 3): List<Doctor> =
+    doctors.filter { dialNumber(it.phone).isNotEmpty() }
+        .sortedWith(compareByDescending<Doctor> { d -> appts.count { it.doctorId == d.id || (it.doctorId == null && it.doctorName == d.name) } }.thenBy { it.name })
+        .take(limit)
+
+/** The doctor an appointment belongs to, by id or by saved name. */
+fun doctorOf(appt: Appointment, doctors: List<Doctor>): Doctor? =
+    doctors.firstOrNull { it.id == appt.doctorId } ?: doctors.firstOrNull { appt.doctorId == null && it.name == appt.doctorName }
+
 fun medsOfDoctor(doctor: Doctor, meds: List<Medication>): List<Medication> = meds.filter { it.doctorId == doctor.id }
 
 enum class ApptReminder(val label: String) { EVENING_BEFORE("الليلة اللي قبله"), TWO_HOURS("قبله بساعتين"), QUARTER("قبله بربع ساعة") }
