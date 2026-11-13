@@ -229,7 +229,8 @@ class CatalogTest {
         val a = Doctor("a", "أحمد", phone = "0100")
         val b = Doctor("b", "بسمة", phone = "0111")
         val c = Doctor("c", "جمال")
-        val visits = listOf(appt.copy(doctorId = "b"), appt.copy(doctorId = "b"), appt.copy(doctorId = "a"))
+        val base = Appointment("x", null, "س", LocalDateTime.of(2026, 11, 10, 17, 0))
+        val visits = listOf(base.copy(doctorId = "b"), base.copy(doctorId = "b"), base.copy(doctorId = "a"))
         assertEquals(listOf(b, a), topDoctors(listOf(a, b, c), visits))
         assertEquals(b, doctorOf(visits.first(), listOf(a, b, c)))
     }
