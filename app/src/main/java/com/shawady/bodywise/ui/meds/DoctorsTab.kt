@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
@@ -249,6 +248,10 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     )
+                    Button(
+                        onClick = { addingDoctor = true },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) { Icon(Icons.Default.Add, null); Text("  دكتور جديد") }
                     Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -272,12 +275,6 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                                 )
                             }
                         }
-                    }
-                    Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { addingDoctor = true },
-                            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) { Icon(Icons.Default.Add, null); Text("  دكتور جديد") }
                     }
                 }
             }

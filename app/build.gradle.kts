@@ -28,8 +28,8 @@ android {
         applicationId = "com.shawady.bodywise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 32
-        versionName = "0.12.3"
+        versionCode = 33
+        versionName = "0.12.4"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
     buildFeatures { compose = true; buildConfig = true }
