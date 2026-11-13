@@ -139,7 +139,7 @@ fun HomeScreen(vm: BodyWiseViewModel, updateVm: com.shawady.bodywise.update.Upda
                         Text("$day • ${a.at.toLocalTime().format12()}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         if (doctor != null && doctor.phone.isNotBlank()) {
                             androidx.compose.material3.IconButton(onClick = { call(doctor) }) {
-                                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.Call, "اتصال بـ ${doctor.name}")
+                                Text("📞", fontSize = 20.sp)
                             }
                         }
                     }
