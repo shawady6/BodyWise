@@ -191,7 +191,7 @@ private fun MainScaffold(vm: BodyWiseViewModel, updateVm: UpdateViewModel, appLo
                 )
                 if (tab == 4) {
                     IconButton(onClick = { tab = lastMainTab }, modifier = Modifier.align(Alignment.CenterStart).size(52.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", modifier = Modifier.size(28.dp))
+                        Text("→", fontSize = 30.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 IconButton(onClick = { settingsSection = null; tab = if (tab == 4) lastMainTab else 4 }, modifier = Modifier.align(Alignment.CenterEnd).size(52.dp)) {
