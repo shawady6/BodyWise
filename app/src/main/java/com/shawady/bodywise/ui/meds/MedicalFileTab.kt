@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -110,6 +111,7 @@ fun MedicalFileTab(vm: BodyWiseViewModel) {
                         Text("${d.kind} • ${d.title.ifBlank { "بدون عنوان" }}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Hint(d.date.toString() + if (doctorLabel.isNotBlank()) " • $doctorLabel" else "")
                     }
+                    if (d.files.isNotEmpty()) IconButton(onClick = { shareDocWhatsapp(context, vm, d) }) { Icon(Icons.Default.Share, "إرسال واتساب") }
                     IconButton(onClick = { docEditor = d }) { Icon(Icons.Default.Edit, "تعديل") }
                     IconButton(onClick = { vm.deleteDoc(d) }) { Icon(Icons.Default.DeleteOutline, "حذف") }
                 }

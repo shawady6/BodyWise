@@ -70,6 +70,42 @@ fun openPdf(context: Context, vm: BodyWiseViewModel, name: String) {
     }.onFailure { vm.toast = "مفيش تطبيق على الموبايل بيفتح ملفات PDF" }
 }
 
+/** "روشتة دكتور أحمد — سكر (2026-11-01)" style caption for sharing a document. */
+fun docShareText(vm: BodyWiseViewModel, doc: MedicalDoc): String {
+    val doctor = vm.doctors.firstOrNull { it.id == doc.doctorId }?.name ?: doc.doctorName
+    return buildString {
+        append(doc.kind)
+        if (doctor.isNotBlank()) append(" دكتور ").append(doctor)
+        if (doc.title.isNotBlank()) append(" — ").append(doc.title)
+        append(" (").append(doc.date).append(")")
+    }
+}
+
+/** Sends all of a document's files to WhatsApp with a caption; falls back to the system share sheet. */
+fun shareDocWhatsapp(context: Context, vm: BodyWiseViewModel, doc: MedicalDoc) {
+    val files = doc.files.map { vm.medPhotoFile(it) }.filter { it.isFile }
+    val text = docShareText(vm, doc)
+    val uris = ArrayList(files.mapNotNull { f ->
+        runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f) }.getOrNull()
+    })
+    val intent = if (uris.size <= 1) Intent(Intent.ACTION_SEND).apply {
+        uris.firstOrNull()?.let { putExtra(Intent.EXTRA_STREAM, it) }
+        type = if (files.firstOrNull()?.name?.let { isPdfFile(it) } == true) "application/pdf" else if (uris.isEmpty()) "text/plain" else "image/*"
+    } else Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        type = if (files.all { isPdfFile(it.name) }) "application/pdf" else if (files.none { isPdfFile(it.name) }) "image/*" else "*/*"
+    }
+    intent.putExtra(Intent.EXTRA_TEXT, text)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    val sent = listOf("com.whatsapp", "com.whatsapp.w4b").any { pkg ->
+        runCatching { context.startActivity(Intent(intent).setPackage(pkg)) }.isSuccess
+    }
+    if (!sent) {
+        runCatching { context.startActivity(Intent.createChooser(intent, "إرسال المستند").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { vm.toast = "تعذر فتح الإرسال" }
+    }
+}
+
 /** Small preview tiles for a document's files; images open the viewer, PDFs open the PDF app. */
 @Composable
 fun DocFilesStrip(vm: BodyWiseViewModel, files: List<String>, onOpenImage: (Int) -> Unit) {

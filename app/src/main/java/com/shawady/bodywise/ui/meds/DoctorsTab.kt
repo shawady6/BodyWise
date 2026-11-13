@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
@@ -249,7 +250,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     )
                     Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 110.dp),
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (vm.doctors.isEmpty()) {
@@ -272,14 +273,13 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                             }
                         }
                     }
+                    Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { addingDoctor = true },
+                            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) { Icon(Icons.Default.Add, null); Text("  دكتور جديد") }
+                    }
                 }
-                ExtendedFloatingActionButton(
-                    onClick = { addingDoctor = true },
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("دكتور جديد") },
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
-                )
             }
         }
     }
@@ -452,6 +452,7 @@ private fun FinishDialog(a: Appointment, onDismiss: () -> Unit, onSave: (String,
 /** Every document linked to one doctor, with previews that open the viewer or the PDF app. */
 @Composable
 private fun DoctorDocsDialog(vm: BodyWiseViewModel, doctor: Doctor, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     var viewing by remember { mutableStateOf<Pair<com.shawady.bodywise.data.MedicalDoc, Int>?>(null) }
     val docs = docsOfDoctor(doctor, vm.medDocs)
     AlertDialog(
@@ -463,7 +464,10 @@ private fun DoctorDocsDialog(vm: BodyWiseViewModel, doctor: Doctor, onDismiss: (
                 if (docs.isEmpty()) Hint("مفيش مستندات.")
                 docs.forEach { d ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("${d.kind} • ${d.title.ifBlank { "بدون عنوان" }}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${d.kind} • ${d.title.ifBlank { "بدون عنوان" }}", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                            if (d.files.isNotEmpty()) IconButton(onClick = { shareDocWhatsapp(context, vm, d) }) { Icon(Icons.Default.Share, "إرسال واتساب") }
+                        }
                         Hint(d.date.toString())
                         if (d.files.isNotEmpty()) DocFilesStrip(vm, d.files) { i -> viewing = d to i }
                     }
