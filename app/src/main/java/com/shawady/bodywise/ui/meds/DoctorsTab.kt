@@ -233,6 +233,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
     var booking by remember { mutableStateOf(false) }
     var bookDoctor by remember { mutableStateOf<Doctor?>(null) }
     var docsDoctor by remember { mutableStateOf<Doctor?>(null) }
+    var prefillName by remember { mutableStateOf("") }
     val shown = vm.doctors.filter { matchesDoctor(it, query) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -260,6 +261,11 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                             Hint("لسه ما سجلتش أي دكتور. اضغط \"دكتور جديد\" وسجّل اسمه ورقمه، وبضغطة واحدة تتصل بيه.")
                         } else if (shown.isEmpty()) {
                             Hint("مفيش دكتور مطابق للبحث.")
+                            if (query.isNotBlank()) {
+                                OutlinedButton(onClick = { prefillName = query.trim(); addingDoctor = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Add, null); Text("  ضيف \"${query.trim()}\" كدكتور")
+                                }
+                            }
                         }
                         shown.forEach { d ->
                             AppCard {
@@ -281,7 +287,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
         }
     }
     if (addingDoctor || doctorEditor != null) {
-        DoctorDialog(doctorEditor, onDismiss = { addingDoctor = false; doctorEditor = null }, onSave = { vm.saveDoctor(it); addingDoctor = false; doctorEditor = null })
+        DoctorDialog(doctorEditor, prefillName, onDismiss = { addingDoctor = false; doctorEditor = null; prefillName = "" }, onSave = { vm.saveDoctor(it); addingDoctor = false; doctorEditor = null; prefillName = "" })
     }
     docsDoctor?.let { d -> DoctorDocsDialog(vm, d) { docsDoctor = null } }
     if (booking) {
@@ -344,8 +350,8 @@ private fun DoctorCard(
 }
 
 @Composable
-private fun DoctorDialog(initial: Doctor?, onDismiss: () -> Unit, onSave: (Doctor) -> Unit) {
-    var name by remember { mutableStateOf(initial?.name ?: "") }
+private fun DoctorDialog(initial: Doctor?, prefillName: String, onDismiss: () -> Unit, onSave: (Doctor) -> Unit) {
+    var name by remember { mutableStateOf(initial?.name ?: prefillName) }
     var specialty by remember { mutableStateOf(initial?.specialty ?: "") }
     var phone by remember { mutableStateOf(initial?.phone ?: "") }
     var clinic by remember { mutableStateOf(initial?.clinic ?: "") }
