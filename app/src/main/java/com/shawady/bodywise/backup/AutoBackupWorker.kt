@@ -117,7 +117,7 @@ class AutoBackupWorker(context: Context, params: WorkerParameters) : Worker(cont
             val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(days.coerceAtLeast(1).toLong(), TimeUnit.DAYS)
                 .setInitialDelay(Duration.between(now, first).toMinutes(), TimeUnit.MINUTES)
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
-                .setBackoffRequest(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
+                .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
                 .build()
             manager.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
