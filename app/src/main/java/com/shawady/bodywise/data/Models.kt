@@ -75,6 +75,11 @@ data class AppSettings(
     val weeklyReminder: Boolean = false,
     val autoBackupUri: String? = null,
     val lastAutoBackup: String? = null,
+    /** Days between automatic backups (1, 3, 7, 14 or 30). */
+    val autoBackupDays: Int = 7,
+    /** Notify when an automatic backup finishes (failures are always notified). */
+    val autoBackupNotify: Boolean = true,
+    val lastAutoBackupError: String? = null,
     val onboarded: Boolean = false,
     /** Notify when a new version is published (checked about twice a day when online). */
     val updateNotices: Boolean = true,

@@ -566,7 +566,27 @@ class BodyWiseViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setAutoBackupFolder(uri: Uri?) {
-        update { it.copy(autoBackupUri = uri?.toString()) }
-        AutoBackupWorker.schedule(getApplication(), uri != null)
+        update { it.copy(autoBackupUri = uri?.toString(), lastAutoBackupError = null) }
+        AutoBackupWorker.schedule(getApplication(), uri != null, settings.autoBackupDays)
+    }
+
+    fun setAutoBackupDays(days: Int) {
+        update { it.copy(autoBackupDays = days) }
+        if (settings.autoBackupUri != null) AutoBackupWorker.schedule(getApplication(), true, days)
+    }
+
+    fun setAutoBackupNotify(enabled: Boolean) = update { it.copy(autoBackupNotify = enabled) }
+
+    fun backupNow() {
+        AutoBackupWorker.runNow(getApplication())
+        toast = "بدأت النسخة الاحتياطية، هيجيلك إشعار لما تخلص"
+    }
+
+    /** The background worker writes its result straight to storage; this picks it up for the screen. */
+    fun reloadAutoBackupInfo() {
+        val saved = settingsStore.load()
+        if (saved.lastAutoBackup != settings.lastAutoBackup || saved.lastAutoBackupError != settings.lastAutoBackupError) {
+            settings = settings.copy(lastAutoBackup = saved.lastAutoBackup, lastAutoBackupError = saved.lastAutoBackupError)
+        }
     }
 }

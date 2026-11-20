@@ -47,8 +47,17 @@ class BodyWiseStore(private val context: Context) {
     }
 }
 
+val AUTO_BACKUP_DAYS = listOf(1, 3, 7, 14, 30)
+
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("bodywise_data", Context.MODE_PRIVATE)
+
+    /** Written by the background worker; only touches its own keys so it can't overwrite other settings. */
+    fun recordAutoBackup(info: String?, error: String?) {
+        val edit = prefs.edit().putString("last_auto_backup_error", error)
+        if (info != null) edit.putString("last_auto_backup", info).putLong("last_backup", System.currentTimeMillis())
+        edit.apply()
+    }
 
     fun load(): AppSettings {
         val legacyDark = prefs.getBoolean("dark", false)
@@ -59,6 +68,9 @@ class SettingsStore(context: Context) {
             weeklyReminder = prefs.getBoolean("weekly_reminder", false),
             autoBackupUri = prefs.getString("auto_backup_uri", null),
             lastAutoBackup = prefs.getString("last_auto_backup", null),
+            autoBackupDays = prefs.getInt("auto_backup_days", 7).takeIf { it in AUTO_BACKUP_DAYS } ?: 7,
+            autoBackupNotify = prefs.getBoolean("auto_backup_notify", true),
+            lastAutoBackupError = prefs.getString("last_auto_backup_error", null),
             onboarded = prefs.getBoolean("onboarded", false),
             updateNotices = prefs.getBoolean("update_notices", true),
             medTone = prefs.getString("med_tone", null),
@@ -76,6 +88,9 @@ class SettingsStore(context: Context) {
             .putBoolean("weekly_reminder", settings.weeklyReminder)
             .putString("auto_backup_uri", settings.autoBackupUri)
             .putString("last_auto_backup", settings.lastAutoBackup)
+            .putInt("auto_backup_days", settings.autoBackupDays)
+            .putBoolean("auto_backup_notify", settings.autoBackupNotify)
+            .putString("last_auto_backup_error", settings.lastAutoBackupError)
             .putBoolean("onboarded", settings.onboarded)
             .putBoolean("update_notices", settings.updateNotices)
             .putString("med_tone", settings.medTone)

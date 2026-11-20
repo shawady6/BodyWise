@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -69,6 +71,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
     val context = LocalContext.current
     val settings = vm.settings
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(Unit) { while (true) { vm.reloadAutoBackupInfo(); kotlinx.coroutines.delay(3000) } }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) vm.exportBackup(uri)
@@ -84,7 +87,7 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                 )
             }
             vm.setAutoBackupFolder(uri)
-            vm.toast = "تم تفعيل النسخ الاحتياطي الأسبوعي"
+            vm.toast = "تم تفعيل النسخ الاحتياطي التلقائي"
         }
     }
     val toggleReminder = rememberReminderToggler(vm)
@@ -189,13 +192,32 @@ fun SettingsScreen(vm: BodyWiseViewModel, updateVm: UpdateViewModel, lockAvailab
                 Hint(vm.backupMessage)
                 Hint("الاستعادة تستبدل البيانات الحالية بالبيانات الموجودة في النسخة المختارة.")
                 if (settings.autoBackupUri == null) {
+                    Hint("اختار فولدر وهنحفظ فيه نسخة كاملة تلقائيًا بالمدة اللي تحددها، ويجيلك إشعار لما تخلص.")
                     OutlinedButton(onClick = { folder.launch(null) }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Folder, null); Spacer(Modifier.width(8.dp)); Text("تفعيل النسخ الأسبوعي التلقائي (اختيار مجلد)")
+                        Icon(Icons.Default.Folder, null); Spacer(Modifier.width(8.dp)); Text("تفعيل النسخ التلقائي (اختيار فولدر)")
                     }
                 } else {
-                    Text("النسخ الأسبوعي التلقائي مفعّل", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-                    Hint("آخر نسخة تلقائية: ${settings.lastAutoBackup ?: "لسه ما تمتش"} • بنحتفظ بآخر 5 نسخ")
+                    val folderName = remember(settings.autoBackupUri) {
+                        runCatching { androidx.documentfile.provider.DocumentFile.fromTreeUri(context, Uri.parse(settings.autoBackupUri))?.name }.getOrNull()
+                    }
+                    Text("النسخ التلقائي مفعّل", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                    Hint("الفولدر: ${folderName ?: "تم اختياره"}")
+                    Hint("كل قد إيه؟")
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(1 to "كل يوم", 3 to "كل 3 أيام", 7 to "كل أسبوع", 14 to "كل أسبوعين", 30 to "كل شهر").forEach { (days, label) ->
+                            FilterChip(selected = settings.autoBackupDays == days, onClick = { vm.setAutoBackupDays(days) }, label = { Text(label) })
+                        }
+                    }
+                    SwitchRow("إشعار بعد انتهاء النسخ", "هيجيلك إشعار لما النسخة تتحفظ (وتنبيه دايمًا لو فشلت)", settings.autoBackupNotify) { vm.setAutoBackupNotify(it) }
+                    Hint("آخر نسخة تلقائية: ${settings.lastAutoBackup ?: "لسه ما تمتش"}")
+                    settings.lastAutoBackupError?.let { Text("⚠️ $it", color = com.shawady.bodywise.ui.theme.Status.danger(), fontSize = 13.sp) }
+                    Button(onClick = { vm.backupNow() }, modifier = Modifier.fillMaxWidth()) { Text("نسخة دلوقتي") }
+                    OutlinedButton(onClick = { folder.launch(null) }, modifier = Modifier.fillMaxWidth()) { Text("تغيير الفولدر") }
                     OutlinedButton(onClick = { vm.setAutoBackupFolder(null) }, modifier = Modifier.fillMaxWidth()) { Text("إيقاف النسخ التلقائي") }
+                    Hint("بنحتفظ بآخر 7 نسخ، والنسخة بتتعمل حوالي الساعة 3 الفجر. حجم النسخة بيكبر مع الصور والـ PDF، فاختار مدة تناسب مساحة الفولدر.")
                 }
             }
         }
