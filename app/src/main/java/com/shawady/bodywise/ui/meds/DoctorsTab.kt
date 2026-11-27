@@ -238,7 +238,7 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().padding(bottom = com.shawady.bodywise.ui.components.dialogBottomInset())) {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "إغلاق") }

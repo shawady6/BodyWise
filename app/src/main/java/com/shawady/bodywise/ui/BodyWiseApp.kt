@@ -90,7 +90,7 @@ fun BodyWiseApp(activity: FragmentActivity) {
     }
 
     BodyWiseTheme(dark) {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl, com.shawady.bodywise.ui.components.LocalMainView provides view) {
             val appLock = remember { AppLock(activity) }
             var unlocked by rememberSaveable { mutableStateOf(!vm.settings.appLock) }
             var lockMessage by remember { mutableStateOf("استخدم بصمة الإصبع أو قفل الشاشة لفتح BodyWise") }

@@ -228,10 +228,10 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
         step++
     }
 
-    // The dialog window handles the status/navigation bars and the keyboard itself (adjustResize), so nothing is hidden at the bottom.
+    // On some phones the dialog window extends under the navigation bar, so the bottom padding is added by hand.
     Dialog(onDismissRequest = { dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().padding(bottom = com.shawady.bodywise.ui.components.dialogBottomInset())) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { dismiss() }) { Icon(Icons.Default.Close, "إغلاق") }
                     Text(if (initial == null) "دواء جديد" else "تعديل الدواء", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
