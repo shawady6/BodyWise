@@ -410,7 +410,7 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                 }
                 // Floating, transparent and borderless: just the buttons, centred, over the scrolling content.
                 Row(
-                    Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (step > 0) TextButton(onClick = { step-- }) { Text("السابق") }
