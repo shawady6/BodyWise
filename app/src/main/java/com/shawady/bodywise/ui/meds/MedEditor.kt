@@ -242,8 +242,9 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                         FilterChip(selected = step == i, onClick = { step = i }, label = { Text(label, fontSize = 13.sp) })
                     }
                 }
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxWidth()) {
                 Column(
-                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 84.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     when (step) {
@@ -407,10 +408,14 @@ fun MedEditor(vm: BodyWiseViewModel, initial: Medication?, onDismiss: () -> Unit
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (step > 0) OutlinedButton(onClick = { step-- }) { Text("السابق") }
-                    Spacer(Modifier.weight(1f))
+                // Floating, transparent and borderless: just the buttons, centred, over the scrolling content.
+                Row(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (step > 0) TextButton(onClick = { step-- }) { Text("السابق") }
                     Button(onClick = { if (step < 2) goNext() else save() }) { Text(if (step < 2) "التالي" else "حفظ") }
+                }
                 }
             }
         }
