@@ -249,12 +249,8 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     )
-                    Button(
-                        onClick = { addingDoctor = true },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) { Icon(Icons.Default.Add, null); Text("  دكتور جديد") }
                     Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 84.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (vm.doctors.isEmpty()) {
@@ -282,6 +278,10 @@ private fun DoctorCatalog(vm: BodyWiseViewModel, now: LocalDateTime, onDismiss: 
                             }
                         }
                     }
+                }
+                // Floating, centred and borderless, like the medication editor's buttons.
+                Button(onClick = { addingDoctor = true }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)) {
+                    Icon(Icons.Default.Add, null); Text("  دكتور جديد")
                 }
             }
         }
